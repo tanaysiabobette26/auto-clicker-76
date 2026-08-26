@@ -1,40 +1,38 @@
 import time
-import pyautogui
+import threading
+from typing import Callable
 
-class AutoClicker:
-    def __init__(self, interval=1, button='left'):
-        self.interval = interval
-        self.button = button
-        self.running = False
+class TurboPulseCore:
+    def __init__(self, cps: float = 100.0, click_callback: Callable[[], None] = lambda: None):
+        self.cps = max(1.0, cps)
+        self.interval = 1.0 / self.cps
+        self.callback = click_callback
+        self._active = threading.Event()
+        self._thread = threading.Thread(target=self._pulse_loop, daemon=True)
+        self._thread.start()
 
-    def start(self):
-        self.running = True
-        print(f'Starting auto-clicker with {self.button} button every {self.interval} seconds.')
-        while self.running:
-            pyautogui.click(button=self.button)
-            time.sleep(self.interval)
+    def _pulse_loop(self) -> None:
+        target_time = time.perf_counter()
+        while True:
+            self._active.wait()
+            target_time += self.interval
+            current_time = time.perf_counter()
+            sleep_duration = target_time - current_time
+            
+            if sleep_duration > 0:
+                time.sleep(sleep_duration)
+            else:
+                target_time = current_time
+            
+            if self._active.is_set():
+                self.callback()
 
-    def stop(self):
-        self.running = False
-        print('Auto-clicker stopped.')
+    def ignite(self) -> None:
+        self._active.set()
 
-    def set_interval(self, interval):
-        if interval > 0:
-            self.interval = interval
-            print(f'Interval set to {self.interval} seconds.')
-        else:
-            print('Interval must be greater than zero.')
+    def halt(self) -> None:
+        self._active.clear()
 
-    def set_button(self, button):
-        if button in ['left', 'right', 'middle']:
-            self.button = button
-            print(f'Button set to {self.button}.')
-        else:
-            print('Invalid button. Please choose left, right, or middle.')
-
-if __name__ == '__main__':
-    auto_clicker = AutoClicker(interval=0.5)
-    try:
-        auto_clicker.start()
-    except KeyboardInterrupt:
-        auto_clicker.stop()
+    def adjust_frequency(self, new_cps: float) -> None:
+        self.cps = max(1.0, new_cps)
+        self.interval = 1.0 / self.cps
