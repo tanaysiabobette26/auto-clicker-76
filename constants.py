@@ -1,58 +1,53 @@
-import json
-import os
-from dataclasses import dataclass, asdict
+from typing import Dict, Final, Any
 
-@dataclass
-class ConfigDefaults:
-    interval_ms: int = 100
-    duration_sec: float = 10.0
-    button: str = "left"
-    start_hotkey: str = "f8"
-    stop_hotkey: str = "f9"
-    random_offset: bool = False
-    max_clicks: int = 0
+class ConstantMeta(type):
+    def __setattr__(cls, key: str, value: Any) -> None:
+        if key in cls.__dict__ and not key.startswith("__"):
+            raise AttributeError(f"Cannot reassign constant {key}")
+        super().__setattr__(key, value)
 
-DEFAULTS = ConfigDefaults()
+class AutoClickerConstants(metaclass=ConstantMeta):
+    MIN_INTERVAL: Final = 0.001
+    MAX_INTERVAL: Final = 5.0
+    DEFAULT_INTERVAL: Final = 0.1
+    MIN_CLICKS: Final = 1
+    MAX_CLICKS: Final = 100000
+    DEFAULT_CLICKS: Final = 10
+    HUMAN_VARIANCE: Final = 0.03
+    CLICK_DURATION: Final = 0.01
+    PAUSE_BETWEEN: Final = 0.05
+    HOTKEY_TOGGLE: Final = "f7"
+    HOTKEY_STOP: Final = "f8"
+    BUTTON_MAP: Final = {
+        "left": 1,
+        "right": 2,
+        "middle": 3
+    }
+    VERSION: Final = "1.76"
+    APP_NAME: Final = "auto-clicker-76"
 
-def load_config(config_file = "autoclicker_config.json"):
-    config = asdict(DEFAULTS)
-    if os.path.exists(config_file):
-        try:
-            with open(config_file, "r") as f:
-                loaded = json.load(f)
-                for key, value in loaded.items():
-                    if key in config:
-                        config[key] = value
-        except Exception:
-            pass
-    env_prefix = "AUTOCLICKER_"
-    for key in list(config.keys()):
-        env_key = env_prefix + key.upper()
-        if env_key in os.environ:
-            val = os.environ[env_key]
-            if key in ["interval_ms", "max_clicks"]:
-                config[key] = int(val)
-            elif key == "duration_sec":
-                config[key] = float(val)
-            elif key == "random_offset":
-                config[key] = val.lower() == "true"
-            else:
-                config[key] = val
-    return config
+    @staticmethod
+    def calculate_interval(clicks_per_second: int) -> float:
+        if clicks_per_second < 1:
+            return AutoClickerConstants.MAX_INTERVAL
+        raw = 1.0 / clicks_per_second
+        return max(AutoClickerConstants.MIN_INTERVAL, min(raw, AutoClickerConstants.MAX_INTERVAL))
 
-def get_config_object(config_file = None):
-    loaded = load_config(config_file or "autoclicker_config.json")
-    return ConfigDefaults(**loaded)
+    @classmethod
+    def get_button(cls, name: str) -> int:
+        normalized = name.lower().strip()
+        return cls.BUTTON_MAP.get(normalized, cls.BUTTON_MAP["left"])
 
-def validate_config(config):
-    if config.get("interval_ms", 0) < 1:
-        return False
-    if config.get("duration_sec", 0) < 0:
-        return False
-    if config.get("button") not in ["left", "right", "middle"]:
-        return False
-    return True
+    @classmethod
+    def validate_interval(cls, interval: float) -> bool:
+        return cls.MIN_INTERVAL <= interval <= cls.MAX_INTERVAL
 
-def reset_to_defaults(config_file = "autoclicker_config.json"):
-    with open(config_file, "w") as f:
-        json.dump(asdict(DEFAULTS), f, indent=4)
+    @classmethod
+    def export_all(cls) -> Dict[str, Any]:
+        constants = {}
+        for attr in dir(cls):
+            if not attr.startswith("_") and not callable(getattr(cls, attr)):
+                val = getattr(cls, attr)
+                if isinstance(val, (int, float, str, dict)):
+                    constants[attr] = val
+        return constants
