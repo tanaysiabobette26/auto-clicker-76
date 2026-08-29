@@ -1,26 +1,58 @@
-import sys
+import json
+import os
+from dataclasses import dataclass, asdict
 
-VERSION = "7.6.0"
-APP_NAME = "auto-clicker-76"
-DEFAULT_CPS = 20.0
-MAX_CPS = 1000.0
-MIN_DELAY = 0.001
-TOGGLE_KEY = "f6"
-EXIT_KEY = "f12"
-RECORD_KEY = "f8"
-PLAY_KEY = "f9"
-CONFIG_FILE = "clicker_config.json"
-LOG_FORMAT = "[%(asctime)s] [%(levelname)s] (%(name)s): %(message)s"
-LOG_LEVEL = "INFO"
-PLATFORM = sys.platform
-IS_WINDOWS = PLATFORM.startswith("win")
-IS_MACOS = PLATFORM == "darwin"
-IS_LINUX = PLATFORM.startswith("linux")
-MAX_MACRO_EVENTS = 50000
-DEFAULT_MOUSE_BUTTON = "left"
-SUPPORTED_BUTTONS = {"left", "right", "middle"}
-COLOR_ACCENT = "#00ffcc"
-COLOR_BG = "#1e1e1e"
-COLOR_TEXT = "#ffffff"
-FONT_FAMILY = "Consolas"
-FONT_SIZE = 10
+@dataclass
+class ConfigDefaults:
+    interval_ms: int = 100
+    duration_sec: float = 10.0
+    button: str = "left"
+    start_hotkey: str = "f8"
+    stop_hotkey: str = "f9"
+    random_offset: bool = False
+    max_clicks: int = 0
+
+DEFAULTS = ConfigDefaults()
+
+def load_config(config_file = "autoclicker_config.json"):
+    config = asdict(DEFAULTS)
+    if os.path.exists(config_file):
+        try:
+            with open(config_file, "r") as f:
+                loaded = json.load(f)
+                for key, value in loaded.items():
+                    if key in config:
+                        config[key] = value
+        except Exception:
+            pass
+    env_prefix = "AUTOCLICKER_"
+    for key in list(config.keys()):
+        env_key = env_prefix + key.upper()
+        if env_key in os.environ:
+            val = os.environ[env_key]
+            if key in ["interval_ms", "max_clicks"]:
+                config[key] = int(val)
+            elif key == "duration_sec":
+                config[key] = float(val)
+            elif key == "random_offset":
+                config[key] = val.lower() == "true"
+            else:
+                config[key] = val
+    return config
+
+def get_config_object(config_file = None):
+    loaded = load_config(config_file or "autoclicker_config.json")
+    return ConfigDefaults(**loaded)
+
+def validate_config(config):
+    if config.get("interval_ms", 0) < 1:
+        return False
+    if config.get("duration_sec", 0) < 0:
+        return False
+    if config.get("button") not in ["left", "right", "middle"]:
+        return False
+    return True
+
+def reset_to_defaults(config_file = "autoclicker_config.json"):
+    with open(config_file, "w") as f:
+        json.dump(asdict(DEFAULTS), f, indent=4)
