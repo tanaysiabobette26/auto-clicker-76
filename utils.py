@@ -1,39 +1,29 @@
-import logging
-from logging.handlers import RotatingFileHandler
-from pathlib import Path
-import sys
+import time
+import functools
+import random
 
-def get_rotating_logger(name: str = "auto_clicker_76") -> logging.Logger:
-    logger = logging.getLogger(name)
-    if logger.hasHandlers():
-        return logger
-    log_dir = Path("logs")
-    log_dir.mkdir(exist_ok=True)
-    log_file = log_dir / f"{name}.log"
-    max_bytes = 2 * 1024 * 1024
-    backup_count = 4
-    file_handler = RotatingFileHandler(
-        filename=str(log_file),
-        maxBytes=max_bytes,
-        backupCount=backup_count,
-        encoding="utf-8"
-    )
-    file_handler.setLevel(logging.DEBUG)
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
-    formatter = logging.Formatter(
-        fmt="[%(asctime)s] %(levelname)s - %(name)s: %(message)s",
-        datefmt="%H:%M:%S"
-    )
-    file_handler.setFormatter(formatter)
-    console_handler.setFormatter(formatter)
-    logger.setLevel(logging.DEBUG)
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-    logger.click_count = 0
-    def log_click(msg):
-        logger.click_count += 1
-        logger.info(f"Click #{logger.click_count}: {msg}")
-    logger.log_click = log_click
-    logger.info("Auto-clicker logger ready with rotation")
-    return logger
+def exponential_backoff(max_retries=3, base_delay=1.0):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            retries = 0
+            while retries < max_retries:
+                try:
+                    return func(*args, **kwargs)
+                except (ConnectionError, TimeoutError) as e:
+                    retries += 1
+                    if retries >= max_retries:
+                        raise e
+                    # Creative jitter to avoid thundering herd on auto-clicker server
+                    sleep_time = (base_delay * (2 ** (retries - 1))) + (random.random() * 0.5)
+                    time.sleep(sleep_time)
+            return None
+        return wrapper
+    return decorator
+
+@exponential_backoff(max_retries=5)
+def fetch_remote_config():
+    # Simulate network instability for auto-clicker settings
+    if random.random() < 0.7:
+        raise ConnectionError("Server busy clicking too fast")
+    return {"interval": 0.05, "burst_mode": True}
