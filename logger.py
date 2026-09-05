@@ -1,33 +1,32 @@
 import logging
-from logging.handlers import RotatingFileHandler
-import os
+import sys
+from datetime import datetime
 
-def get_logger(name: str, log_file: str = 'auto-clicker.log') -> logging.Logger:
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
+class ClickerLogger:
+    def __init__(self, name="auto-clicker-76"):
+        self.logger = logging.getLogger(name)
+        self.logger.setLevel(logging.DEBUG)
+        self._setup_streams()
 
-    if not logger.handlers:
+    def _setup_streams(self):
         formatter = logging.Formatter(
-            '%(asctime)s | %(levelname)-8s | %(name)s | %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
+            "[%(asctime)s | %(levelname)s] %(message)s", 
+            datefmt="%H:%M:%S"
         )
+        stdout_handler = logging.StreamHandler(sys.stdout)
+        stdout_handler.setFormatter(formatter)
+        self.logger.addHandler(stdout_handler)
 
-        # Rolling logs at 1MB, keeping 3 backups
-        handler = RotatingFileHandler(
-            log_file,
-            maxBytes=1_048_576,
-            backupCount=3
-        )
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
+    def info(self, msg):
+        self.logger.info(f"✨ {msg}")
 
-        # Console stream for interactive debugging
-        console = logging.StreamHandler()
-        console.setFormatter(formatter)
-        logger.addHandler(console)
+    def warn(self, msg):
+        self.logger.warning(f"⚠️ {msg}")
 
-    return logger
+    def error(self, msg):
+        self.logger.error(f"💥 {msg}")
 
-# Dynamic log initialization
-log = get_logger('auto-clicker-76')
-log.info('logger initialization complete')
+    def debug(self, msg):
+        self.logger.debug(f"🔎 {msg}")
+
+logger = ClickerLogger()
