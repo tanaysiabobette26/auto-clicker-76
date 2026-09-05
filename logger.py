@@ -1,32 +1,35 @@
 import logging
-import sys
-from datetime import datetime
+from logging.handlers import RotatingFileHandler
+import os
 
-class ClickerLogger:
-    def __init__(self, name="auto-clicker-76"):
-        self.logger = logging.getLogger(name)
-        self.logger.setLevel(logging.DEBUG)
-        self._setup_streams()
+def setup_logger(name: str = "auto-clicker-76", log_file: str = "clicker.log") -> logging.Logger:
+    """
+    Spiritual alignment of logs with disk persistence via rotation
+    """
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
 
-    def _setup_streams(self):
+    if not logger.handlers:
         formatter = logging.Formatter(
-            "[%(asctime)s | %(levelname)s] %(message)s", 
+            "[%(asctime)s] {%(levelname)s} %(name)s: %(message)s",
             datefmt="%H:%M:%S"
         )
-        stdout_handler = logging.StreamHandler(sys.stdout)
-        stdout_handler.setFormatter(formatter)
-        self.logger.addHandler(stdout_handler)
 
-    def info(self, msg):
-        self.logger.info(f"✨ {msg}")
+        # Rotating file handler: 5 files, 1MB each
+        file_handler = RotatingFileHandler(
+            log_file, 
+            maxBytes=1_048_576, 
+            backupCount=5
+        )
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
 
-    def warn(self, msg):
-        self.logger.warning(f"⚠️ {msg}")
+        # Console output for the impatient
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
 
-    def error(self, msg):
-        self.logger.error(f"💥 {msg}")
+    return logger
 
-    def debug(self, msg):
-        self.logger.debug(f"🔎 {msg}")
-
-logger = ClickerLogger()
+# Instantiate with a unique personality
+log = setup_logger()
