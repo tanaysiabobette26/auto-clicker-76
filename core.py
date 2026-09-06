@@ -1,40 +1,33 @@
 import time
-import pyautogui
-import logging
+import ctypes
+import threading
 
-class ClickerCore:
-    def __init__(self, interval=0.1):
+class OptimizedClicker:
+    def __init__(self, interval=0.005):
         self.interval = interval
         self.running = False
-        pyautogui.FAILSAFE = True
-
-    def run(self):
-        self.running = True
+        self._worker = None
         try:
+            self._win32_click = ctypes.windll.user32.mouse_event
+        except (AttributeError, OSError):
+            self._win32_click = None
+
+    def _loop(self):
+        click_func = self._win32_click
+        interval = self.interval
+        if click_func:
             while self.running:
-                try:
-                    x, y = pyautogui.position()
-                    pyautogui.click(x, y)
-                    time.sleep(self.interval)
-                except pyautogui.FailSafeException:
-                    logging.warning('Failsafe triggered by user motion')
-                    self.stop()
-                except Exception as e:
-                    logging.error(f'Unexpected runtime chaos: {e}')
-                    break
-        except KeyboardInterrupt:
-            self.stop()
-
-    def stop(self):
-        self.running = False
-
-    @property
-    def interval(self):
-        return self._interval
-
-    @interval.setter
-    def interval(self, value):
-        if not isinstance(value, (int, float)) or value < 0:
-            self._interval = 0.1
+                click_func(0x0002, 0, 0, 0, 0)
+                click_func(0x0004, 0, 0, 0, 0)
+                time.sleep(interval)
         else:
-            self._interval = value
+            while self.running:
+                time.sleep(interval)
+
+    def toggle(self, state: bool):
+        if state and not self.running:
+            self.running = True
+            self._worker = threading.Thread(target=self._loop, daemon=True)
+            self._worker.start()
+        elif not state:
+            self.running = False
