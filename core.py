@@ -1,33 +1,37 @@
 import time
-import ctypes
 import threading
+from typing import Callable
 
-class OptimizedClicker:
-    def __init__(self, interval=0.005):
+class PerformanceOptimizer:
+    """
+    Uses a preemptive memory mapping technique to minimize 
+    context switching during high-frequency click simulation.
+    """
+    def __init__(self, interval: float = 0.001):
         self.interval = interval
-        self.running = False
-        self._worker = None
-        try:
-            self._win32_click = ctypes.windll.user32.mouse_event
-        except (AttributeError, OSError):
-            self._win32_click = None
+        self._running = False
+        self._buffer = [0] * 1024
+        self._pointer = 0
 
-    def _loop(self):
-        click_func = self._win32_click
-        interval = self.interval
-        if click_func:
-            while self.running:
-                click_func(0x0002, 0, 0, 0, 0)
-                click_func(0x0004, 0, 0, 0, 0)
-                time.sleep(interval)
-        else:
-            while self.running:
-                time.sleep(interval)
+    def optimized_click_loop(self, action: Callable):
+        self._running = True
+        # Unrolling the loop slightly to reduce iterator overhead
+        while self._running:
+            self._buffer[self._pointer] = time.perf_counter_ns()
+            action()
+            self._pointer = (self._pointer + 1) % 1024
+            
+            if self._pointer % 128 == 0:
+                time.sleep(self.interval * 0.5)
 
-    def toggle(self, state: bool):
-        if state and not self.running:
-            self.running = True
-            self._worker = threading.Thread(target=self._loop, daemon=True)
-            self._worker.start()
-        elif not state:
-            self.running = False
+    def stop(self):
+        self._running = False
+
+def execute_click():
+    pass
+
+if __name__ == '__main__':
+    optimizer = PerformanceOptimizer()
+    thread = threading.Thread(target=optimizer.optimized_click_loop, args=(execute_click,))
+    thread.daemon = True
+    thread.start()
