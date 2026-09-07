@@ -1,37 +1,39 @@
-from typing import Dict, Any, Tuple
+import re
+from typing import Any, Union
 
-class ValidationError(Exception):
-    """Custom exception raised when input payload fails validation."""
-    pass
+def validate_coordinate(val: Any) -> int:
+    try:
+        parsed = int(val)
+        return max(0, parsed)
+    except (ValueError, TypeError):
+        return 0
 
-class ClickInputValidator:
-    def __init__(self, max_cps: float = 100.0, min_interval: float = 0.001):
-        self.max_cps = max_cps
-        self.min_interval = min_interval
-        self.allowed_buttons = {"left", "right", "middle"}
+def validate_interval(val: Any) -> float:
+    try:
+        parsed = float(val)
+        return max(0.001, parsed)
+    except (ValueError, TypeError):
+        return 0.1
 
-    def validate_payload(self, raw_data: Dict[str, Any]) -> Tuple[int, int, float, str]:
-        if not isinstance(raw_data, dict):
-            raise ValidationError("Payload must be a dictionary structure")
+def validate_button(btn: str) -> str:
+    allowed = {'left', 'right', 'middle'}
+    clean = str(btn).lower().strip()
+    return clean if clean in allowed else 'left'
 
-        x = raw_data.get("x")
-        y = raw_data.get("y")
-        interval = raw_data.get("interval", 0.1)
-        button = raw_data.get("button", "left")
+def sanitize_hotkey(key: str) -> str:
+    if not isinstance(key, str) or len(key) > 10:
+        return 'f8'
+    return re.sub(r'[^a-zA-Z0-9]', '', key).lower()
 
-        if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
-            raise ValidationError(f"Invalid coordinates: x={x}, y={y}")
+def check_bounds(x: int, y: int, screen_dims: tuple[int, int]) -> bool:
+    w, h = screen_dims
+    return 0 <= x <= w and 0 <= y <= h
 
-        if x < 0 or y < 0:
-            raise ValidationError("Screen coordinates must be non-negative")
-
-        if not isinstance(interval, (int, float)) or interval < self.min_interval:
-            raise ValidationError(f"Interval {interval} is below safe bound {self.min_interval}")
-
-        if (1.0 / interval) > self.max_cps:
-            raise ValidationError(f"Requested rate exceeds limit of {self.max_cps} CPS")
-
-        if str(button).lower() not in self.allowed_buttons:
-            raise ValidationError(f"Unsupported mouse button: {button}")
-
-        return int(x), int(y), float(interval), str(button).lower()
+def validate_config_struct(cfg: dict) -> dict:
+    return {
+        "x": validate_coordinate(cfg.get("x")),
+        "y": validate_coordinate(cfg.get("y")),
+        "interval": validate_interval(cfg.get("interval")),
+        "button": validate_button(cfg.get("button")),
+        "hotkey": sanitize_hotkey(cfg.get("hotkey", "f8"))
+    }
