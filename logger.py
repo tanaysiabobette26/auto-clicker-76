@@ -1,39 +1,31 @@
-import sys
-import time
+import logging
+import json
+from datetime import datetime
 from pathlib import Path
 
 class ClickLogger:
-    def __init__(self, log_file="autoclick.log", buffer_size=10):
-        self.log_path = Path(log_file)
-        self.buffer = []
-        self.buffer_size = buffer_size
-        self.symbols = {"info": "[i]", "warning": "[!]", "error": "[X]"}
+    def __init__(self, log_dir: str = "logs"):
+        self.log_path = Path(log_dir)
+        self.log_path.mkdir(exist_ok=True)
+        self.logger = logging.getLogger("auto-clicker-76")
+        self.logger.setLevel(logging.INFO)
+        handler = logging.FileHandler(self.log_path / "session.log")
+        handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+        self.logger.addHandler(handler)
 
-    def _dispatch(self, level: str, message: str):
-        timestamp = time.strftime("%H:%M:%S")
-        tag = self.symbols.get(level, "[*]")
-        formatted = f"{timestamp} {tag} {message}"
-        self.buffer.append(formatted)
-        
-        stream = sys.stderr if level == "error" else sys.stdout
-        stream.write(formatted + "\n")
-        stream.flush()
-        
-        if len(self.buffer) >= self.buffer_size:
-            self.flush()
+    def log_event(self, action: str, data: dict):
+        payload = {
+            "timestamp": datetime.now().isoformat(),
+            "event": action,
+            "details": data
+        }
+        self.logger.info(json.dumps(payload))
 
-    def flush(self):
-        if not self.buffer:
-            return
-        with open(self.log_path, "a", encoding="utf-8") as f:
-            f.write("\n".join(self.buffer) + "\n")
-        self.buffer.clear()
-
-    def info(self, msg: str):
-        self._dispatch("info", msg)
-
-    def warning(self, msg: str):
-        self._dispatch("warning", msg)
-
-    def error(self, msg: str):
-        self._dispatch("error", msg)
+    def rotate_logs(self):
+        """Compresses current logs into a datestamped archive."""
+        import zipfile
+        archive_name = self.log_path / f"archive_{datetime.now().strftime('%Y%m%d')}.zip"
+        with zipfile.ZipFile(archive_name, 'w') as zipf:
+            for log_file in self.log_path.glob("*.log"):
+                zipf.write(log_file, log_file.name)
+                log_file.unlink()
