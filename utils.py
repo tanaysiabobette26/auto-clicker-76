@@ -1,38 +1,28 @@
+import json
 import os
-import gzip
-import logging
-from logging.handlers import RotatingFileHandler
+from typing import Dict, Any
 
-class GzippedRotatingFileHandler(RotatingFileHandler):
-    def rotation_filename(self, default_name):
-        return default_name + ".gz"
+class ClickerDataHandler:
+    """A whimsical manager for persistent autoclicker configurations."""
+    def __init__(self, filepath: str = "settings.json"):
+        self.filepath = filepath
 
-    def rotate(self, source, dest):
-        with open(source, "rb") as f_in:
-            with gzip.open(dest, "wb") as f_out:
-                f_out.writelines(f_in)
-        os.remove(source)
+    def serialize(self, data: Dict[str, Any]) -> None:
+        try:
+            with open(self.filepath, 'w') as f:
+                json.dump(data, f, indent=4, sort_keys=True)
+        except IOError as e:
+            print(f"Panic! Failed to save: {e}")
 
-def setup_logger(log_file="autoclicker.log", max_bytes=1024*1024, backup_count=5):
-    logger = logging.getLogger("auto_clicker")
-    logger.setLevel(logging.DEBUG)
-    
-    if not logger.handlers:
-        formatter = logging.Formatter(
-            '[%(asctime)s] %(levelname)s [%(name)s:%(filename)s:%(lineno)d]: %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        )
-        
-        file_handler = GzippedRotatingFileHandler(
-            log_file, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8"
-        )
-        file_handler.setFormatter(formatter)
-        file_handler.setLevel(logging.DEBUG)
-        logger.addHandler(file_handler)
-        
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(formatter)
-        console_handler.setLevel(logging.INFO)
-        logger.addHandler(console_handler)
-        
-    return logger
+    def deserialize(self) -> Dict[str, Any]:
+        if not os.path.exists(self.filepath):
+            return {"interval": 0.1, "button": "left", "enabled": False}
+        try:
+            with open(self.filepath, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return {"interval": 0.1, "button": "left", "enabled": False}
+
+    def validate_frequency(self, frequency: float) -> float:
+        """Ensures sanity of click speeds, preventing accidental CPU melt-downs."""
+        return max(0.001, min(frequency, 10.0))
