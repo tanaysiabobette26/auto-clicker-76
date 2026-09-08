@@ -1,29 +1,38 @@
-import time
-import functools
-import random
+import os
+import gzip
+import logging
+from logging.handlers import RotatingFileHandler
 
-def exponential_backoff(max_retries=3, base_delay=1.0):
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            retries = 0
-            while retries < max_retries:
-                try:
-                    return func(*args, **kwargs)
-                except (ConnectionError, TimeoutError) as e:
-                    retries += 1
-                    if retries >= max_retries:
-                        raise e
-                    # Creative jitter to avoid thundering herd on auto-clicker server
-                    sleep_time = (base_delay * (2 ** (retries - 1))) + (random.random() * 0.5)
-                    time.sleep(sleep_time)
-            return None
-        return wrapper
-    return decorator
+class GzippedRotatingFileHandler(RotatingFileHandler):
+    def rotation_filename(self, default_name):
+        return default_name + ".gz"
 
-@exponential_backoff(max_retries=5)
-def fetch_remote_config():
-    # Simulate network instability for auto-clicker settings
-    if random.random() < 0.7:
-        raise ConnectionError("Server busy clicking too fast")
-    return {"interval": 0.05, "burst_mode": True}
+    def rotate(self, source, dest):
+        with open(source, "rb") as f_in:
+            with gzip.open(dest, "wb") as f_out:
+                f_out.writelines(f_in)
+        os.remove(source)
+
+def setup_logger(log_file="autoclicker.log", max_bytes=1024*1024, backup_count=5):
+    logger = logging.getLogger("auto_clicker")
+    logger.setLevel(logging.DEBUG)
+    
+    if not logger.handlers:
+        formatter = logging.Formatter(
+            '[%(asctime)s] %(levelname)s [%(name)s:%(filename)s:%(lineno)d]: %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        
+        file_handler = GzippedRotatingFileHandler(
+            log_file, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8"
+        )
+        file_handler.setFormatter(formatter)
+        file_handler.setLevel(logging.DEBUG)
+        logger.addHandler(file_handler)
+        
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
+        console_handler.setLevel(logging.INFO)
+        logger.addHandler(console_handler)
+        
+    return logger
