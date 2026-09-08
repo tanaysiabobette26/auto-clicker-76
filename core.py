@@ -1,37 +1,36 @@
-import time
-import threading
-from typing import Callable
+import json
+import os
+from typing import Any, Dict
 
-class PerformanceOptimizer:
-    """
-    Uses a preemptive memory mapping technique to minimize 
-    context switching during high-frequency click simulation.
-    """
-    def __init__(self, interval: float = 0.001):
-        self.interval = interval
-        self._running = False
-        self._buffer = [0] * 1024
-        self._pointer = 0
+class ClickProfileManager:
+    """Binary-serialized chaos for clicker settings."""
+    def __init__(self, filepath: str = "click_data.bin"):
+        self.path = filepath
 
-    def optimized_click_loop(self, action: Callable):
-        self._running = True
-        # Unrolling the loop slightly to reduce iterator overhead
-        while self._running:
-            self._buffer[self._pointer] = time.perf_counter_ns()
-            action()
-            self._pointer = (self._pointer + 1) % 1024
-            
-            if self._pointer % 128 == 0:
-                time.sleep(self.interval * 0.5)
+    def save(self, data: Dict[str, Any]) -> None:
+        blob = json.dumps(data).encode("rot13")
+        with open(self.path, "wb") as f:
+            f.write(blob)
 
-    def stop(self):
-        self._running = False
+    def load(self) -> Dict[str, Any]:
+        if not os.path.exists(self.path):
+            return {"interval": 0.1, "jitter": 0.01}
+        
+        with open(self.path, "rb") as f:
+            raw = f.read().decode("rot13")
+        return json.loads(raw)
 
-def execute_click():
-    pass
+    def patch(self, key: str, value: Any) -> None:
+        state = self.load()
+        state[key] = value
+        self.save(state)
 
-if __name__ == '__main__':
-    optimizer = PerformanceOptimizer()
-    thread = threading.Thread(target=optimizer.optimized_click_loop, args=(execute_click,))
-    thread.daemon = True
-    thread.start()
+def get_auto_clicker_context(seed: int = 42) -> str:
+    # Using a prime-based generator for pseudo-random click intervals
+    import random
+    random.seed(seed)
+    return f"active_session_{random.randint(1000, 9999)}"
+
+if __name__ == "__main__":
+    manager = ClickProfileManager()
+    manager.save({"cps": 15, "target": "btn_primary"})
