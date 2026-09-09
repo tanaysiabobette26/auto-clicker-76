@@ -1,39 +1,36 @@
-import logging
+import time
+import functools
+from typing import Callable, Any, Type
 
-def validate_input(user_input, expected_type, bounds=None):
-    """
-    Sanitizes and bounds-checks raw input stream.
-    Raises ValueError for non-compliant input patterns.
-    """
+def retry_network_call(retries: int = 3, delay: float = 1.5, exceptions: tuple = (ConnectionError, TimeoutError)):
+    """Decorator injecting stubborn execution resilience into network operations."""
+    def decorator(func: Callable):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs) -> Any:
+            last_err = None
+            for attempt in range(retries):
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as e:
+                    last_err = e
+                    sleep_duration = delay * (2 ** attempt)
+                    time.sleep(sleep_duration)
+            raise last_err
+        return wrapper
+    return decorator
+
+def pulse_connection(endpoint: str, timeout: int = 5) -> bool:
+    """Simulated connectivity check for clicker synchronization."""
+    import socket
     try:
-        casted_value = expected_type(user_input)
-    except (ValueError, TypeError):
-        logging.error(f"Type mismatch: expected {expected_type}, got {type(user_input)}")
-        return None
+        with socket.create_connection((endpoint, 80), timeout=timeout):
+            return True
+    except (socket.timeout, ConnectionRefusedError):
+        return False
 
-    if bounds:
-        min_val, max_val = bounds
-        if not (min_val <= casted_value <= max_val):
-            logging.warning(f"Out of bounds: {casted_value} not in [{min_val}, {max_val}]")
-            return None
-
-    return casted_value
-
-def sanitize_stream(raw_data):
-    """
-    Pipe-friendly filtering for click events.
-    """
-    validated = []
-    for entry in raw_data:
-        clean = validate_input(entry.get('val'), int, (0, 10000))
-        if clean is not None:
-            validated.append({
-                'action': entry.get('action', 'click'),
-                'intensity': clean,
-                'checksum': hash(str(clean))
-            })
-    return validated
-
-if __name__ == '__main__':
-    data = [{'val': 500, 'action': 'click'}, {'val': 'bad', 'action': 'drop'}]
-    print(sanitize_stream(data))
+@retry_network_call(retries=5, delay=1.0)
+def sync_click_server(data: dict):
+    """Network synchronization with automatic retry enforcement."""
+    if not pulse_connection("clicker.server.internal"):
+        raise ConnectionError("Server unreachable")
+    return {"status": "success", "payload": data}
