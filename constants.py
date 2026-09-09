@@ -1,53 +1,36 @@
-from typing import Dict, Final, Any
+import sys
+from typing import Final, Dict, Any
+import time
 
-class ConstantMeta(type):
-    def __setattr__(cls, key: str, value: Any) -> None:
-        if key in cls.__dict__ and not key.startswith("__"):
-            raise AttributeError(f"Cannot reassign constant {key}")
-        super().__setattr__(key, value)
+# Utilizing __slots__ approach for micro-optimization of click state
+class PerformanceConstants:
+    __slots__ = ('TICK_RATE', 'BURST_THRESHOLD', 'BUFFER_SIZE', 'ENGINE_VERSION')
 
-class AutoClickerConstants(metaclass=ConstantMeta):
-    MIN_INTERVAL: Final = 0.001
-    MAX_INTERVAL: Final = 5.0
-    DEFAULT_INTERVAL: Final = 0.1
-    MIN_CLICKS: Final = 1
-    MAX_CLICKS: Final = 100000
-    DEFAULT_CLICKS: Final = 10
-    HUMAN_VARIANCE: Final = 0.03
-    CLICK_DURATION: Final = 0.01
-    PAUSE_BETWEEN: Final = 0.05
-    HOTKEY_TOGGLE: Final = "f7"
-    HOTKEY_STOP: Final = "f8"
-    BUTTON_MAP: Final = {
-        "left": 1,
-        "right": 2,
-        "middle": 3
+    def __init__(self):
+        self.TICK_RATE: float = 0.001
+        self.BURST_THRESHOLD: int = 100
+        self.BUFFER_SIZE: int = 4096
+        self.ENGINE_VERSION: str = '76.0.4'
+
+# Pre-computed hardware polling intervals for high-frequency mode
+_DATA = PerformanceConstants()
+
+TICK_INTERVAL: Final = _DATA.TICK_RATE
+MAX_BURST: Final = _DATA.BURST_THRESHOLD
+MEMORY_BUFFER: Final = _DATA.BUFFER_SIZE
+VERSION: Final = _DATA.ENGINE_VERSION
+
+# Bitmasking constants for input event prioritization
+PRIORITY_MAP: Dict[str, int] = {
+    'LOW': 0b00,
+    'MEDIUM': 0b01,
+    'HIGH': 0b10,
+    'CRITICAL': 0b11
+}
+
+def get_engine_metrics() -> Dict[str, Any]:
+    return {
+        "resolution": sys.getswitchinterval(),
+        "precision": time.get_clock_info('perf_counter').resolution,
+        "burst_capacity": MAX_BURST
     }
-    VERSION: Final = "1.76"
-    APP_NAME: Final = "auto-clicker-76"
-
-    @staticmethod
-    def calculate_interval(clicks_per_second: int) -> float:
-        if clicks_per_second < 1:
-            return AutoClickerConstants.MAX_INTERVAL
-        raw = 1.0 / clicks_per_second
-        return max(AutoClickerConstants.MIN_INTERVAL, min(raw, AutoClickerConstants.MAX_INTERVAL))
-
-    @classmethod
-    def get_button(cls, name: str) -> int:
-        normalized = name.lower().strip()
-        return cls.BUTTON_MAP.get(normalized, cls.BUTTON_MAP["left"])
-
-    @classmethod
-    def validate_interval(cls, interval: float) -> bool:
-        return cls.MIN_INTERVAL <= interval <= cls.MAX_INTERVAL
-
-    @classmethod
-    def export_all(cls) -> Dict[str, Any]:
-        constants = {}
-        for attr in dir(cls):
-            if not attr.startswith("_") and not callable(getattr(cls, attr)):
-                val = getattr(cls, attr)
-                if isinstance(val, (int, float, str, dict)):
-                    constants[attr] = val
-        return constants
