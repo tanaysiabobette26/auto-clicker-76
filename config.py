@@ -1,52 +1,37 @@
 import json
 import os
-from typing import Dict, Any, Optional
+from typing import Any, Dict
 
 class ConfigLoader:
-    def __init__(self, path: Optional[str] = None):
-        self.defaults: Dict[str, Any] = {
-            "click_interval_ms": 100,
-            "click_count": 0,
-            "start_hotkey": "f8",
-            "stop_hotkey": "f9",
-            "mouse_button": "left",
-            "randomize_interval": False,
-            "random_range": 20,
-            "fixed_position": False,
-            "pos_x": 0,
-            "pos_y": 0
-        }
-        self.path = path or "auto_clicker_config.json"
-        self.config: Dict[str, Any] = self._load()
+    DEFAULT_CONFIG = {
+        "interval": 0.1,
+        "button": "left",
+        "jitter": False,
+        "max_clicks": 1000
+    }
 
-    def _load(self) -> Dict[str, Any]:
-        config = self.defaults.copy()
-        if os.path.isfile(self.path):
-            try:
-                with open(self.path, "r", encoding="utf-8") as f:
-                    loaded = json.load(f)
-                for k, v in loaded.items():
-                    if k in config and type(v) == type(config[k]):
-                        config[k] = v
-            except (json.JSONDecodeError, OSError, TypeError):
-                pass
-        return config
+    def __init__(self, filepath: str = "config.json"):
+        self.filepath = filepath
 
-    def get(self, key: str, default: Optional[Any] = None) -> Any:
-        return self.config.get(key, default if default is not None else self.defaults.get(key))
+    def load(self) -> Dict[str, Any]:
+        if not os.path.exists(self.filepath):
+            self._write_defaults()
+            return self.DEFAULT_CONFIG
+        
+        try:
+            with open(self.filepath, 'r') as f:
+                user_config = json.load(f)
+                return {**self.DEFAULT_CONFIG, **user_config}
+        except (json.JSONDecodeError, IOError):
+            return self.DEFAULT_CONFIG
 
-    def __getattr__(self, item: str) -> Any:
-        if item in self.config:
-            return self.config[item]
-        if item in self.defaults:
-            return self.defaults[item]
-        raise AttributeError(f"'ConfigLoader' object has no attribute '{item}'")
+    def _write_defaults(self) -> None:
+        try:
+            with open(self.filepath, 'w') as f:
+                json.dump(self.DEFAULT_CONFIG, f, indent=4)
+        except IOError:
+            pass
 
-    def update(self, **kwargs: Any) -> None:
-        for k, v in kwargs.items():
-            if k in self.config:
-                self.config[k] = v
-
-    def save(self) -> None:
-        with open(self.path, "w", encoding="utf-8") as f:
-            json.dump(self.config, f, indent=4)
+def get_config(path: str = "config.json") -> Dict[str, Any]:
+    loader = ConfigLoader(path)
+    return loader.load()
