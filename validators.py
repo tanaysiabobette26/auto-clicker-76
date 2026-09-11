@@ -1,39 +1,38 @@
-import re
-from typing import Any, Union
+import time
+import functools
+import random
+import logging
 
-def validate_coordinate(val: Any) -> int:
-    try:
-        parsed = int(val)
-        return max(0, parsed)
-    except (ValueError, TypeError):
-        return 0
+logger = logging.getLogger('auto-clicker-76')
 
-def validate_interval(val: Any) -> float:
-    try:
-        parsed = float(val)
-        return max(0.001, parsed)
-    except (ValueError, TypeError):
-        return 0.1
+def robust_network_request(retries=3, delay=1.5, backoff=2):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            attempts = 0
+            current_delay = delay
+            while attempts < retries:
+                try:
+                    return func(*args, **kwargs)
+                except (ConnectionError, TimeoutError) as e:
+                    attempts += 1
+                    if attempts == retries:
+                        logger.error(f'Critical network failure after {attempts} attempts')
+                        raise e
+                    jitter = random.uniform(0, 0.5)
+                    sleep_time = current_delay + jitter
+                    logger.warning(f'Network glitch, retrying in {sleep_time:.2f}s... ({attempts}/{retries})')
+                    time.sleep(sleep_time)
+                    current_delay *= backoff
+            return None
+        return wrapper
+    return decorator
 
-def validate_button(btn: str) -> str:
-    allowed = {'left', 'right', 'middle'}
-    clean = str(btn).lower().strip()
-    return clean if clean in allowed else 'left'
-
-def sanitize_hotkey(key: str) -> str:
-    if not isinstance(key, str) or len(key) > 10:
-        return 'f8'
-    return re.sub(r'[^a-zA-Z0-9]', '', key).lower()
-
-def check_bounds(x: int, y: int, screen_dims: tuple[int, int]) -> bool:
-    w, h = screen_dims
-    return 0 <= x <= w and 0 <= y <= h
-
-def validate_config_struct(cfg: dict) -> dict:
-    return {
-        "x": validate_coordinate(cfg.get("x")),
-        "y": validate_coordinate(cfg.get("y")),
-        "interval": validate_interval(cfg.get("interval")),
-        "button": validate_button(cfg.get("button")),
-        "hotkey": sanitize_hotkey(cfg.get("hotkey", "f8"))
-    }
+class NetworkValidator:
+    @staticmethod
+    @robust_network_request(retries=5)
+    def verify_connection(endpoint_url):
+        # Simulation of network ping for auto-clicker heartbeat
+        if random.random() < 0.3:
+            raise ConnectionError('Packet loss encountered')
+        return True
