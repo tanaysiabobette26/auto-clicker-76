@@ -1,37 +1,37 @@
 import json
-import os
 from typing import Any, Dict
 
-class ConfigLoader:
-    DEFAULT_CONFIG = {
-        "interval": 0.1,
-        "button": "left",
-        "jitter": False,
-        "max_clicks": 1000
-    }
+DEFAULT_CONFIG = {
+    "interval": 0.1,
+    "button": "left",
+    "repeat": -1,
+    "hotkey": "f6"
+}
 
-    def __init__(self, filepath: str = "config.json"):
-        self.filepath = filepath
+class ConfigManager:
+    def __init__(self, path: str = "config.json"):
+        self.path = path
+        self.data = self._load()
 
-    def load(self) -> Dict[str, Any]:
-        if not os.path.exists(self.filepath):
-            self._write_defaults()
-            return self.DEFAULT_CONFIG
-        
+    def _load(self) -> Dict[str, Any]:
         try:
-            with open(self.filepath, 'r') as f:
-                user_config = json.load(f)
-                return {**self.DEFAULT_CONFIG, **user_config}
-        except (json.JSONDecodeError, IOError):
-            return self.DEFAULT_CONFIG
+            with open(self.path, "r") as f:
+                loaded = json.load(f)
+                return {**DEFAULT_CONFIG, **loaded}
+        except (FileNotFoundError, json.JSONDecodeError):
+            self._save_defaults()
+            return DEFAULT_CONFIG
 
-    def _write_defaults(self) -> None:
-        try:
-            with open(self.filepath, 'w') as f:
-                json.dump(self.DEFAULT_CONFIG, f, indent=4)
-        except IOError:
-            pass
+    def _save_defaults(self):
+        with open(self.path, "w") as f:
+            json.dump(DEFAULT_CONFIG, f, indent=4)
 
-def get_config(path: str = "config.json") -> Dict[str, Any]:
-    loader = ConfigLoader(path)
-    return loader.load()
+    def get(self, key: str) -> Any:
+        return self.data.get(key, DEFAULT_CONFIG.get(key))
+
+    def update(self, key: str, value: Any):
+        self.data[key] = value
+        with open(self.path, "w") as f:
+            json.dump(self.data, f, indent=4)
+
+config_instance = ConfigManager()
