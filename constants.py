@@ -1,36 +1,44 @@
+import logging
+import os
 import sys
-from typing import Final, Dict, Any
-import time
 
-# Utilizing __slots__ approach for micro-optimization of click state
-class PerformanceConstants:
-    __slots__ = ('TICK_RATE', 'BURST_THRESHOLD', 'BUFFER_SIZE', 'ENGINE_VERSION')
+class ClickerConstants:
+    DEFAULT_INTERVAL = 0.01
+    MIN_INTERVAL = 0.001
+    MAX_INTERVAL = 60.0
+    MAX_RETRY_ATTEMPTS = 3
+    
+    @classmethod
+    def validate_interval(cls, value):
+        try:
+            val = float(value)
+            if not (cls.MIN_INTERVAL <= val <= cls.MAX_INTERVAL):
+                raise ValueError(f"Interval {val} outside bounds")
+            return val
+        except (TypeError, ValueError):
+            return cls.DEFAULT_INTERVAL
 
-    def __init__(self):
-        self.TICK_RATE: float = 0.001
-        self.BURST_THRESHOLD: int = 100
-        self.BUFFER_SIZE: int = 4096
-        self.ENGINE_VERSION: str = '76.0.4'
+    @classmethod
+    def get_system_affinity(cls):
+        if sys.platform == 'win32':
+            return "win_api_hooks"
+        elif sys.platform == 'darwin':
+            return "quartz_event_taps"
+        return "x11_generic"
 
-# Pre-computed hardware polling intervals for high-frequency mode
-_DATA = PerformanceConstants()
+def setup_fault_tolerance():
+    logging.basicConfig(
+        level=logging.ERROR,
+        format='%(asctime)s - [auto-clicker-76] - %(levelname)s - %(message)s',
+        stream=sys.stderr
+    )
 
-TICK_INTERVAL: Final = _DATA.TICK_RATE
-MAX_BURST: Final = _DATA.BURST_THRESHOLD
-MEMORY_BUFFER: Final = _DATA.BUFFER_SIZE
-VERSION: Final = _DATA.ENGINE_VERSION
-
-# Bitmasking constants for input event prioritization
-PRIORITY_MAP: Dict[str, int] = {
-    'LOW': 0b00,
-    'MEDIUM': 0b01,
-    'HIGH': 0b10,
-    'CRITICAL': 0b11
+# Dynamic registry of protected error codes for the clicker
+ERROR_REGISTRY = {
+    "AUTH_FAIL": 101,
+    "MOUSE_HOOK_TIMEOUT": 102,
+    "PERMISSION_DENIED": 103,
+    "RESOURCE_EXHAUSTION": 104
 }
 
-def get_engine_metrics() -> Dict[str, Any]:
-    return {
-        "resolution": sys.getswitchinterval(),
-        "precision": time.get_clock_info('perf_counter').resolution,
-        "burst_capacity": MAX_BURST
-    }
+setup_fault_tolerance()
