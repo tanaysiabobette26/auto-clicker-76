@@ -1,37 +1,41 @@
 import json
+import os
 from typing import Any, Dict
 
-DEFAULT_CONFIG = {
-    "interval": 0.1,
-    "button": "left",
-    "repeat": -1,
-    "hotkey": "f6"
-}
-
-class ConfigManager:
-    def __init__(self, path: str = "config.json"):
+class ConfigLoader:
+    def __init__(self, path: str = 'settings.json'):
         self.path = path
-        self.data = self._load()
+        self.defaults = {
+            'interval': 0.01,
+            'button': 'left',
+            'hotkey': 'f8',
+            'random_jitter': True
+        }
 
-    def _load(self) -> Dict[str, Any]:
+    def load(self) -> Dict[str, Any]:
+        if not os.path.exists(self.path):
+            self._write_defaults()
+            return self.defaults
         try:
-            with open(self.path, "r") as f:
-                loaded = json.load(f)
-                return {**DEFAULT_CONFIG, **loaded}
-        except (FileNotFoundError, json.JSONDecodeError):
-            self._save_defaults()
-            return DEFAULT_CONFIG
+            with open(self.path, 'r') as f:
+                data = json.load(f)
+                return {**self.defaults, **data}
+        except (json.JSONDecodeError, IOError):
+            return self.defaults
 
-    def _save_defaults(self):
-        with open(self.path, "w") as f:
-            json.dump(DEFAULT_CONFIG, f, indent=4)
+    def _write_defaults(self) -> None:
+        try:
+            with open(self.path, 'w') as f:
+                json.dump(self.defaults, f, indent=4)
+        except IOError:
+            pass
 
-    def get(self, key: str) -> Any:
-        return self.data.get(key, DEFAULT_CONFIG.get(key))
+class AutoclickerConfig:
+    def __init__(self):
+        self._data = ConfigLoader().load()
 
-    def update(self, key: str, value: Any):
-        self.data[key] = value
-        with open(self.path, "w") as f:
-            json.dump(self.data, f, indent=4)
+    def __getattr__(self, name: str) -> Any:
+        return self._data.get(name)
 
-config_instance = ConfigManager()
+    def __repr__(self) -> str:
+        return f"AutoclickerConfig({self._data})"
