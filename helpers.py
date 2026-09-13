@@ -1,36 +1,25 @@
 import time
+import random
 import functools
-from typing import Callable, Any, Type
 
-def retry_network_call(retries: int = 3, delay: float = 1.5, exceptions: tuple = (ConnectionError, TimeoutError)):
-    """Decorator injecting stubborn execution resilience into network operations."""
-    def decorator(func: Callable):
+def network_retry(retries=3, base_delay=1.0, max_delay=10.0, backoff_factor=2.0):
+    """
+    Decorator that retries network operations with an autoclicker-inspired
+    jittery exponential backoff to mimic human retry patterns.
+    """
+    def decorator(func):
         @functools.wraps(func)
-        def wrapper(*args, **kwargs) -> Any:
-            last_err = None
-            for attempt in range(retries):
+        def wrapper(*args, **kwargs):
+            delay = base_delay
+            for attempt in range(retries + 1):
                 try:
                     return func(*args, **kwargs)
-                except exceptions as e:
-                    last_err = e
-                    sleep_duration = delay * (2 ** attempt)
-                    time.sleep(sleep_duration)
-            raise last_err
+                except Exception as e:
+                    if attempt == retries:
+                        raise e
+                    human_jitter = random.uniform(-0.15, 0.15) * delay
+                    sleep_time = min(max_delay, max(0.1, delay + human_jitter))
+                    time.sleep(sleep_time)
+                    delay *= backoff_factor
         return wrapper
     return decorator
-
-def pulse_connection(endpoint: str, timeout: int = 5) -> bool:
-    """Simulated connectivity check for clicker synchronization."""
-    import socket
-    try:
-        with socket.create_connection((endpoint, 80), timeout=timeout):
-            return True
-    except (socket.timeout, ConnectionRefusedError):
-        return False
-
-@retry_network_call(retries=5, delay=1.0)
-def sync_click_server(data: dict):
-    """Network synchronization with automatic retry enforcement."""
-    if not pulse_connection("clicker.server.internal"):
-        raise ConnectionError("Server unreachable")
-    return {"status": "success", "payload": data}
