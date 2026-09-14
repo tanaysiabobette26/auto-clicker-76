@@ -1,41 +1,32 @@
 import json
 import os
-from typing import Any, Dict
+from typing import Dict, Any
 
-class ConfigLoader:
-    def __init__(self, path: str = 'settings.json'):
-        self.path = path
-        self.defaults = {
-            'interval': 0.01,
-            'button': 'left',
-            'hotkey': 'f8',
-            'random_jitter': True
-        }
+DEFAULT_CONFIG = {
+    "interval": 0.05,
+    "button": "left",
+    "repeat": -1,
+    "hotkey": "f6"
+}
 
-    def load(self) -> Dict[str, Any]:
-        if not os.path.exists(self.path):
-            self._write_defaults()
-            return self.defaults
-        try:
-            with open(self.path, 'r') as f:
-                data = json.load(f)
-                return {**self.defaults, **data}
-        except (json.JSONDecodeError, IOError):
-            return self.defaults
+def load_settings(path: str = "settings.json") -> Dict[str, Any]:
+    try:
+        if not os.path.exists(path):
+            with open(path, "w") as f:
+                json.dump(DEFAULT_CONFIG, f, indent=4)
+            return DEFAULT_CONFIG
+        
+        with open(path, "r") as f:
+            data = json.load(f)
+            return {**DEFAULT_CONFIG, **data}
+    except (json.JSONDecodeError, IOError):
+        return DEFAULT_CONFIG
 
-    def _write_defaults(self) -> None:
-        try:
-            with open(self.path, 'w') as f:
-                json.dump(self.defaults, f, indent=4)
-        except IOError:
-            pass
+class ConfigProxy:
+    def __init__(self, settings: Dict[str, Any]):
+        self.__dict__.update(settings)
 
-class AutoclickerConfig:
-    def __init__(self):
-        self._data = ConfigLoader().load()
+    def __repr__(self):
+        return f"<Config {self.__dict__}>"
 
-    def __getattr__(self, name: str) -> Any:
-        return self._data.get(name)
-
-    def __repr__(self) -> str:
-        return f"AutoclickerConfig({self._data})"
+settings = ConfigProxy(load_settings())
