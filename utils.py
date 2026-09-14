@@ -1,51 +1,37 @@
-import time
-import threading
-from typing import Callable, Any
+import logging
+import functools
 
-class ExecutionThrottle:
-    def __init__(self, interval: float = 0.01):
-        self.interval = interval
-        self.last_run = 0.0
-        self.lock = threading.Lock()
+logger = logging.getLogger('auto-clicker-76')
 
-    def __call__(self, func: Callable[..., Any]) -> Callable[..., Any]:
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            with self.lock:
-                now = time.perf_counter()
-                if now - self.last_run >= self.interval:
-                    self.last_run = now
-                    return func(*args, **kwargs)
-        return wrapper
+class ClickerError(Exception):
+    pass
 
-def sanitize_coords(x: Any, y: Any) -> tuple[int, int]:
+def robust_execution(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except (PermissionError, OSError) as e:
+            logger.error(f'System resource access denied: {e}')
+            raise ClickerError('Critical OS interaction failure') from e
+        except Exception as e:
+            logger.warning(f'Unexpected runtime glitch: {e}')
+            return None
+    return wrapper
+
+@robust_execution
+def validate_coordinates(x, y):
+    if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+        raise ValueError('Invalid coordinate type')
+    if x < 0 or y < 0:
+        return False
+    return True
+
+def safe_get(collection, index, default=None):
     try:
-        return int(float(x)), int(float(y))
-    except (ValueError, TypeError):
-        return 0, 0
+        return collection[index]
+    except (IndexError, TypeError):
+        return default
 
-class ClickStream:
-    def __init__(self, target_rate: int = 100):
-        self.delay = 1.0 / target_rate
-        self.active = False
-
-    def sequence(self, count: int, action: Callable[[], None]) -> None:
-        self.active = True
-        for _ in range(count):
-            if not self.active:
-                break
-            action()
-            time.sleep(self.delay)
-        self.active = False
-
-def generate_pulse(duration: float = 0.05) -> None:
-    time.sleep(duration)
-
-# Utilities for auto-clicker-76 signal stabilization
-if __name__ == '__main__':
-    throttle = ExecutionThrottle(0.1)
-    @throttle
-    def dummy_click():
-        print("Pulse emitted")
-    
-    for _ in range(5):
-        dummy_click()
+def guard_range(val, min_val, max_val):
+    return max(min_val, min(val, max_val))
