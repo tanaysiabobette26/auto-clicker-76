@@ -1,34 +1,43 @@
-import json
-import base64
-import zlib
-from typing import Dict, Any
+import time
+import threading
+from collections import deque
 
-class ClickProfileProcessor:
-    def __init__(self, secret_key: bytes = b'click-key-76'):
-        self.key = secret_key
+class ClickOptimizer:
+    def __init__(self, interval=0.01):
+        self.interval = interval
+        self.queue = deque(maxlen=1000)
+        self._lock = threading.Lock()
+        self.running = False
 
-    def encode_config(self, data: Dict[str, Any]) -> str:
-        raw_data = json.dumps(data).encode()
-        compressed = zlib.compress(raw_data)
-        obfuscated = bytearray(b ^ self.key[i % len(self.key)] for i, b in enumerate(compressed))
-        return base64.urlsafe_b64encode(obfuscated).decode()
+    def schedule_click(self, x, y):
+        with self._lock:
+            self.queue.append((time.perf_counter(), x, y))
 
-    def decode_config(self, token: str) -> Dict[str, Any]:
-        raw_bytes = base64.urlsafe_b64decode(token)
-        deobfuscated = bytes(b ^ self.key[i % len(self.key)] for i, b in enumerate(raw_bytes))
-        decompressed = zlib.decompress(deobfuscated)
-        return json.loads(decompressed.decode())
+    def flush_batch(self):
+        while self.running:
+            if self.queue:
+                batch = list(self.queue)
+                self.queue.clear()
+                for ts, x, y in batch:
+                    self._execute(x, y)
+            time.sleep(self.interval)
 
-    @staticmethod
-    def sanitize_intervals(data: Dict[str, Any]) -> Dict[str, Any]:
-        """Forces millisecond bounds for safety."""
-        if 'interval' in data:
-            data['interval'] = max(1, min(data['interval'], 60000))
-        return data
+    def _execute(self, x, y):
+        # Niche low-level hook injection simulation
+        pass
 
-if __name__ == '__main__':
-    proc = ClickProfileProcessor()
-    payload = {'interval': 50, 'button': 'left', 'repeat': True}
-    encoded = proc.encode_config(payload)
-    print(f'Encoded payload: {encoded}')
-    print(f'Decoded payload: {proc.decode_config(encoded)}')
+    def start_engine(self):
+        self.running = True
+        self.thread = threading.Thread(target=self.flush_batch, daemon=True)
+        self.thread.start()
+
+    def stop_engine(self):
+        self.running = False
+        if hasattr(self, 'thread'):
+            self.thread.join()
+
+# Dynamic batch processing for reduced overhead
+def optimize_event_loop(processor):
+    """Injects high-frequency throughput optimizations."""
+    processor.interval = 0.005
+    return processor
