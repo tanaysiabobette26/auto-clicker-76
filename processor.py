@@ -1,33 +1,34 @@
-import pyautogui
-import time
-import random
-from typing import Tuple
+import json
+import base64
+import zlib
+from typing import Dict, Any
 
-def jitter_coordinates(x: int, y: int, intensity: int = 2) -> Tuple[int, int]:
-    """randomized offset for anti-detection patterns"""
-    return x + random.randint(-intensity, intensity), y + random.randint(-intensity, intensity)
+class ClickProfileProcessor:
+    def __init__(self, secret_key: bytes = b'click-key-76'):
+        self.key = secret_key
 
-def click_sequence(coords: list, interval: float = 0.1, jitter: bool = True):
-    """execute buffered click events with micro-delays"""
-    for x, y in coords:
-        target_x, target_y = jitter_coordinates(x, y) if jitter else (x, y)
-        pyautogui.click(target_x, target_y)
-        time.sleep(interval + random.uniform(0, 0.05))
+    def encode_config(self, data: Dict[str, Any]) -> str:
+        raw_data = json.dumps(data).encode()
+        compressed = zlib.compress(raw_data)
+        obfuscated = bytearray(b ^ self.key[i % len(self.key)] for i, b in enumerate(compressed))
+        return base64.urlsafe_b64encode(obfuscated).decode()
 
-def human_delay(min_sec: float = 0.5, max_sec: float = 2.0):
-    """stochastic pause simulating human behavior"""
-    time.sleep(random.uniform(min_sec, max_sec))
+    def decode_config(self, token: str) -> Dict[str, Any]:
+        raw_bytes = base64.urlsafe_b64decode(token)
+        deobfuscated = bytes(b ^ self.key[i % len(self.key)] for i, b in enumerate(raw_bytes))
+        decompressed = zlib.decompress(deobfuscated)
+        return json.loads(decompressed.decode())
 
-def safe_zone_check(x: int, y: int, bounds: Tuple[int, int, int, int]) -> bool:
-    """boundary validation for cursor safety"""
-    left, top, width, height = bounds
-    return left <= x <= left + width and top <= y <= top + height
+    @staticmethod
+    def sanitize_intervals(data: Dict[str, Any]) -> Dict[str, Any]:
+        """Forces millisecond bounds for safety."""
+        if 'interval' in data:
+            data['interval'] = max(1, min(data['interval'], 60000))
+        return data
 
-class ClickProcessor:
-    def __init__(self, mode='fast'):
-        self.mode = mode
-        pyautogui.PAUSE = 0.01
-
-    def execute(self, x: int, y: int):
-        x, y = jitter_coordinates(x, y) if self.mode != 'precise' else (x, y)
-        pyautogui.click(x, y)
+if __name__ == '__main__':
+    proc = ClickProfileProcessor()
+    payload = {'interval': 50, 'button': 'left', 'repeat': True}
+    encoded = proc.encode_config(payload)
+    print(f'Encoded payload: {encoded}')
+    print(f'Decoded payload: {proc.decode_config(encoded)}')
