@@ -1,25 +1,47 @@
 import time
-import random
-import functools
+import threading
+from queue import PriorityQueue
 
-def network_retry(retries=3, base_delay=1.0, max_delay=10.0, backoff_factor=2.0):
-    """
-    Decorator that retries network operations with an autoclicker-inspired
-    jittery exponential backoff to mimic human retry patterns.
-    """
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            delay = base_delay
-            for attempt in range(retries + 1):
+class BurstExecutor:
+    """High-throughput event batching for click sequences."""
+    def __init__(self, interval=0.001):
+        self.queue = PriorityQueue()
+        self.interval = interval
+        self._stop = threading.Event()
+        self.worker = threading.Thread(target=self._drain, daemon=True)
+        self.worker.start()
+
+    def schedule(self, action_func, priority=0):
+        self.queue.put((priority, action_func))
+
+    def _drain(self):
+        while not self._stop.is_set():
+            if not self.queue.empty():
+                priority, task = self.queue.get()
                 try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    if attempt == retries:
-                        raise e
-                    human_jitter = random.uniform(-0.15, 0.15) * delay
-                    sleep_time = min(max_delay, max(0.1, delay + human_jitter))
-                    time.sleep(sleep_time)
-                    delay *= backoff_factor
-        return wrapper
-    return decorator
+                    task()
+                finally:
+                    self.queue.task_done()
+            time.sleep(self.interval)
+
+    def shutdown(self):
+        self._stop.set()
+        self.worker.join()
+
+def preemptive_sleep(target_hz):
+    """jitter-compensated pause for high-frequency loops."""
+    deadline = time.perf_counter() + (1.0 / target_hz)
+    while time.perf_counter() < deadline:
+        if deadline - time.perf_counter() > 0.002:
+            time.sleep(0.001)
+        else:
+            pass
+
+def cache_key(func):
+    """memoization decorator for static coordinate math."""
+    cache = {}
+    def wrapper(*args):
+        if args not in cache:
+            cache[args] = func(*args)
+        return cache[args]
+    return wrapper
