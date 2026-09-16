@@ -1,19 +1,17 @@
 # auto-clicker-76
 
-`auto-clicker-76` is a high-performance, lightweight automation tool designed to simulate mouse input with millisecond precision. Built for task automation and repetitive workflow efficiency, it provides a stable interface for managing complex clicking sequences.
+`auto-clicker-76` is a lightweight, high-performance automation tool designed to simulate mouse clicks with precision and minimal CPU overhead. It provides a robust command-line interface for users requiring rapid, repetitive input automation for testing or productivity tasks.
 
-![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
+## Features
 
-### Features
+*   **Configurable Intervals:** Set precise click speeds ranging from millisecond-level precision to custom delay intervals.
+*   **Dynamic Hotkeys:** Start and stop automation instantly using global keyboard listeners without needing to focus the terminal.
+*   **Smart Target Mode:** Supports coordinate-based clicking to target specific areas of your desktop environment.
+*   **Low Latency Engine:** Built on `pynput` for cross-platform compatibility and minimal system resource footprint.
 
-*   **Custom Interval Control:** Define precise delays between clicks (in milliseconds) to match specific application response times.
-*   **Dynamic Hotkeys:** Start and stop automation instantly using global keyboard shortcuts, allowing for seamless integration while working.
-*   **Variable Click Modes:** Toggle between single-click, double-click, and hold-to-drag functionalities with a unified command structure.
-*   **Resource Optimized:** Utilizes low-level system hooks to ensure minimal CPU usage, even during rapid, high-frequency execution.
+## Installation
 
-### Installation
-
-Ensure you have [Python 3.8+](https://www.python.org/) installed on your system. Clone the repository and install the required dependencies:
+Ensure you have [Python 3.8+](https://www.python.org/) installed. Clone the repository and install the required dependencies:
 
 ```bash
 git clone https://github.com/Developer/auto-clicker-76.git
@@ -21,21 +19,23 @@ cd auto-clicker-76
 pip install -r requirements.txt
 ```
 
-### Basic Usage
+## Usage
 
-You can launch the clicker directly from your terminal. To initiate a standard click stream at 100ms intervals, use the following command:
+To start the clicker with a default interval of 0.1 seconds, run the following command:
 
 ```bash
-python main.py --interval 100 --mode single
+python main.py --interval 0.1
 ```
 
 **Common Flags:**
-*   `--interval`: Set the delay in milliseconds (default: 500).
-*   `--button`: Specify the mouse button (`left`, `right`, or `middle`).
-*   `--limit`: Set a specific number of clicks before auto-terminating.
+* `--button left`: Set the mouse button to `left`, `right`, or `middle`.
+* `--count 100`: Execute a specific number of clicks before stopping automatically.
+* `--x 500 --y 500`: Force the cursor to a specific screen coordinate before clicking.
 
-Once running, press `F8` to toggle the clicking state globally, or `Esc` to exit the application entirely.
+Use the configured hotkey (default: `F6`) to toggle the clicking process on and off at any time.
 
-### License
+## License
+
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 Distributed under the MIT License. See `LICENSE` for more information.
