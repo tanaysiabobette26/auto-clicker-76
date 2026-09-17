@@ -1,47 +1,31 @@
 import time
-import threading
-from queue import PriorityQueue
+import random
+from typing import Callable, Any, Tuple
 
-class BurstExecutor:
-    """High-throughput event batching for click sequences."""
-    def __init__(self, interval=0.001):
-        self.queue = PriorityQueue()
-        self.interval = interval
-        self._stop = threading.Event()
-        self.worker = threading.Thread(target=self._drain, daemon=True)
-        self.worker.start()
+def jitter_delay(base_ms: int, variance: int = 50) -> None:
+    sleep_time = (base_ms + random.randint(-variance, variance)) / 1000
+    time.sleep(max(0.001, sleep_time))
 
-    def schedule(self, action_func, priority=0):
-        self.queue.put((priority, action_func))
+def execute_with_retry(func: Callable, retries: int = 3, *args: Any, **kwargs: Any) -> Any:
+    for attempt in range(retries):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            if attempt == retries - 1:
+                raise e
+            time.sleep(0.1)
+    return None
 
-    def _drain(self):
-        while not self._stop.is_set():
-            if not self.queue.empty():
-                priority, task = self.queue.get()
-                try:
-                    task()
-                finally:
-                    self.queue.task_done()
-            time.sleep(self.interval)
+def get_screen_center(width: int, height: int) -> Tuple[int, int]:
+    return (width // 2, height // 2)
 
-    def shutdown(self):
-        self._stop.set()
-        self.worker.join()
+def sanitize_interval(val: float, min_val: float = 0.01, max_val: float = 10.0) -> float:
+    return max(min_val, min(val, max_val))
 
-def preemptive_sleep(target_hz):
-    """jitter-compensated pause for high-frequency loops."""
-    deadline = time.perf_counter() + (1.0 / target_hz)
-    while time.perf_counter() < deadline:
-        if deadline - time.perf_counter() > 0.002:
-            time.sleep(0.001)
-        else:
-            pass
+class ClickContext:
+    def __init__(self, target_coord: Tuple[int, int]):
+        self.x, self.y = target_coord
+        self.timestamp = time.perf_counter()
 
-def cache_key(func):
-    """memoization decorator for static coordinate math."""
-    cache = {}
-    def wrapper(*args):
-        if args not in cache:
-            cache[args] = func(*args)
-        return cache[args]
-    return wrapper
+    def __repr__(self) -> str:
+        return f"Click(x={self.x}, y={self.y}) at {self.timestamp:.4f}"
