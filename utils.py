@@ -1,30 +1,40 @@
+import sys
 import time
-import random
 import functools
 from typing import Callable, Any
 
-class NetworkException(Exception):
+class ClickerError(Exception):
+    """Custom escalation for volatile input handling."""
     pass
 
-def retry_with_jitter(retries: int = 3, base_delay: float = 1.0):
+def safety_net(max_retries: int = 3, delay: float = 0.5):
+    """Decorator for resilience against sporadic hardware interrupts."""
     def decorator(func: Callable):
         @functools.wraps(func)
-        def wrapper(*args, **kwargs) -> Any:
-            last_ex = None
-            for attempt in range(retries):
+        def wrapper(*args, **kwargs):
+            attempts = 0
+            while attempts < max_retries:
                 try:
                     return func(*args, **kwargs)
-                except Exception as e:
-                    last_ex = e
-                    delay = base_delay * (2 ** attempt) + random.uniform(0, 0.1)
-                    time.sleep(delay)
-            raise NetworkException(f'failed after {retries} attempts: {last_ex}')
+                except (OSError, RuntimeError) as e:
+                    attempts += 1
+                    if attempts >= max_retries:
+                        raise ClickerError(f"Hardware unreachable: {e}")
+                    time.sleep(delay * attempts)
+            return None
         return wrapper
     return decorator
 
-@retry_with_jitter(retries=3, base_delay=0.5)
-def ping_server(url: str):
-    # Simulate volatile network state
-    if random.random() < 0.7:
-        raise ConnectionError('fickle server')
-    return True
+def validate_coordinates(x: int, y: int) -> bool:
+    """Boundary verification for viewport constraints."""
+    try:
+        if not (isinstance(x, int) and isinstance(y, int)):
+            raise ValueError("Non-integer coordinate sequence")
+        return True
+    except ValueError:
+        return False
+
+def emergency_abort(reason: str):
+    """Instant process termination for critical failures."""
+    sys.stderr.write(f"[CRITICAL] {reason}\n")
+    sys.exit(1)
