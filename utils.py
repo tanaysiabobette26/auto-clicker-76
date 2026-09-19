@@ -1,40 +1,39 @@
-import sys
-import time
+import logging
 import functools
-from typing import Callable, Any
+
+logger = logging.getLogger('auto-clicker-76')
 
 class ClickerError(Exception):
-    """Custom escalation for volatile input handling."""
+    """Base exception for auto-clicker operations."""
     pass
 
-def safety_net(max_retries: int = 3, delay: float = 0.5):
-    """Decorator for resilience against sporadic hardware interrupts."""
-    def decorator(func: Callable):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            attempts = 0
-            while attempts < max_retries:
-                try:
-                    return func(*args, **kwargs)
-                except (OSError, RuntimeError) as e:
-                    attempts += 1
-                    if attempts >= max_retries:
-                        raise ClickerError(f"Hardware unreachable: {e}")
-                    time.sleep(delay * attempts)
+def robust_execution(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except (PermissionError, OSError) as e:
+            logger.error(f'Critical hardware interaction failure: {e}')
+            raise ClickerError('Input device is currently inaccessible.') from e
+        except Exception as e:
+            logger.warning(f'Unexpected jitter during operation: {e}')
             return None
-        return wrapper
-    return decorator
+    return wrapper
 
-def validate_coordinates(x: int, y: int) -> bool:
-    """Boundary verification for viewport constraints."""
-    try:
-        if not (isinstance(x, int) and isinstance(y, int)):
-            raise ValueError("Non-integer coordinate sequence")
-        return True
-    except ValueError:
-        return False
+def validate_coordinates(x: int, y: int):
+    if not isinstance(x, int) or not isinstance(y, int):
+        raise ValueError('Pixel coordinates must be integers')
+    if x < 0 or y < 0:
+        raise ValueError('Screen bounds violation detected')
+    return True
 
-def emergency_abort(reason: str):
-    """Instant process termination for critical failures."""
-    sys.stderr.write(f"[CRITICAL] {reason}\n")
-    sys.exit(1)
+def safe_click_wrapper(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            validate_coordinates(args[0], args[1])
+            return func(*args, **kwargs)
+        except (ValueError, IndexError) as e:
+            logger.error(f'Coordinate validation failure: {e}')
+            return False
+    return wrapper
