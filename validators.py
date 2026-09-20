@@ -1,38 +1,31 @@
-import time
-import functools
-import random
-import logging
+import re
 
-logger = logging.getLogger('auto-clicker-76')
+class ValidationError(Exception):
+    pass
 
-def robust_network_request(retries=3, delay=1.5, backoff=2):
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            attempts = 0
-            current_delay = delay
-            while attempts < retries:
-                try:
-                    return func(*args, **kwargs)
-                except (ConnectionError, TimeoutError) as e:
-                    attempts += 1
-                    if attempts == retries:
-                        logger.error(f'Critical network failure after {attempts} attempts')
-                        raise e
-                    jitter = random.uniform(0, 0.5)
-                    sleep_time = current_delay + jitter
-                    logger.warning(f'Network glitch, retrying in {sleep_time:.2f}s... ({attempts}/{retries})')
-                    time.sleep(sleep_time)
-                    current_delay *= backoff
-            return None
-        return wrapper
-    return decorator
+def validate_click_params(cps, duration):
+    if not isinstance(cps, (int, float)) or cps <= 0:
+        raise ValidationError(f"invalid cps value: {cps}")
+    if not isinstance(duration, (int, float)) or duration < 0:
+        raise ValidationError(f"invalid duration: {duration}")
+    return True
 
-class NetworkValidator:
-    @staticmethod
-    @robust_network_request(retries=5)
-    def verify_connection(endpoint_url):
-        # Simulation of network ping for auto-clicker heartbeat
-        if random.random() < 0.3:
-            raise ConnectionError('Packet loss encountered')
-        return True
+def sanitize_input(user_input):
+    clean = re.sub(r'[^0-9.]', '', str(user_input))
+    return float(clean) if clean else 0.0
+
+def check_bounds(value, min_val, max_val):
+    try:
+        val = float(value)
+        if not (min_val <= val <= max_val):
+            raise ValueError
+        return val
+    except (ValueError, TypeError):
+        return min_val
+
+def schema_enforcer(data_dict):
+    required = ['cps', 'duration']
+    for key in required:
+        if key not in data_dict:
+            raise ValidationError(f"missing required parameter: {key}")
+    return True
