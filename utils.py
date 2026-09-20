@@ -1,39 +1,34 @@
-import logging
-import functools
+import json
+import os
+from typing import Any, Dict
 
-logger = logging.getLogger('auto-clicker-76')
+class ClickerDataHandler:
+    def __init__(self, storage_path: str = "settings.json"):
+        self.storage_path = storage_path
 
-class ClickerError(Exception):
-    """Base exception for auto-clicker operations."""
-    pass
-
-def robust_execution(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
+    def save_profile(self, data: Dict[str, Any]) -> bool:
         try:
-            return func(*args, **kwargs)
-        except (PermissionError, OSError) as e:
-            logger.error(f'Critical hardware interaction failure: {e}')
-            raise ClickerError('Input device is currently inaccessible.') from e
-        except Exception as e:
-            logger.warning(f'Unexpected jitter during operation: {e}')
-            return None
-    return wrapper
-
-def validate_coordinates(x: int, y: int):
-    if not isinstance(x, int) or not isinstance(y, int):
-        raise ValueError('Pixel coordinates must be integers')
-    if x < 0 or y < 0:
-        raise ValueError('Screen bounds violation detected')
-    return True
-
-def safe_click_wrapper(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            validate_coordinates(args[0], args[1])
-            return func(*args, **kwargs)
-        except (ValueError, IndexError) as e:
-            logger.error(f'Coordinate validation failure: {e}')
+            with open(self.storage_path, 'w') as f:
+                json.dump(data, f, indent=4, sort_keys=True)
+            return True
+        except (IOError, TypeError):
             return False
-    return wrapper
+
+    def load_profile(self) -> Dict[str, Any]:
+        if not os.path.exists(self.storage_path):
+            return {"interval": 0.1, "button": "left", "repeats": 0}
+        try:
+            with open(self.storage_path, 'r') as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            return {}
+
+    def sanitize_input(self, val: Any) -> float:
+        """Forces user input into a reliable float."""
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return 0.5
+
+def get_instance() -> ClickerDataHandler:
+    return ClickerDataHandler()
