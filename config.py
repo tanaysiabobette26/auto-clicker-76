@@ -1,32 +1,64 @@
 import json
 import os
-from typing import Dict, Any
+from typing import Any, get_type_hints
 
-DEFAULT_CONFIG = {
-    "interval": 0.05,
-    "button": "left",
-    "repeat": -1,
-    "hotkey": "f6"
-}
+class ConfigMeta(type):
+    def __new__(mcs, name, bases, attrs):
+        cls = super().__new__(mcs, name, bases, attrs)
+        cls._defaults = {k: v for k, v in attrs.items() if not k.startswith('_')}
+        return cls
 
-def load_settings(path: str = "settings.json") -> Dict[str, Any]:
-    try:
-        if not os.path.exists(path):
-            with open(path, "w") as f:
-                json.dump(DEFAULT_CONFIG, f, indent=4)
-            return DEFAULT_CONFIG
-        
-        with open(path, "r") as f:
-            data = json.load(f)
-            return {**DEFAULT_CONFIG, **data}
-    except (json.JSONDecodeError, IOError):
-        return DEFAULT_CONFIG
+class AutoClickerConfig(metaclass=ConfigMeta):
+    delay: float = 0.05
+    hotkey: str = "f8"
+    clicks: int = 0
+    button: str = "left"
+    double_click: bool = False
+    jitter: int = 0
 
-class ConfigProxy:
-    def __init__(self, settings: Dict[str, Any]):
-        self.__dict__.update(settings)
+    def __init__(self, filepath: str = "clicker_config.json"):
+        super().__setattr__('_filepath', filepath)
+        super().__setattr__('_data', {})
+        self.load()
 
-    def __repr__(self):
-        return f"<Config {self.__dict__}>"
+    def load(self) -> None:
+        if os.path.exists(self._filepath):
+            try:
+                with open(self._filepath, 'r') as f:
+                    self._data.update(json.load(f))
+            except (json.JSONDecodeError, IOError):
+                pass
 
-settings = ConfigProxy(load_settings())
+    def save(self) -> None:
+        try:
+            with open(self._filepath, 'w') as f:
+                json.dump(self._data, f, indent=4)
+        except IOError:
+            pass
+
+    def __getattr__(self, name: str) -> Any:
+        if name in self._defaults:
+            val = self._data.get(name, os.environ.get(f"CLICKER_{name.upper()}", self._defaults[name]))
+            hints = get_type_hints(self.__class__)
+            expected_type = hints.get(name, type(val))
+            if expected_type is bool and isinstance(val, str):
+                return val.lower() in ("true", "1", "yes")
+            try:
+                return expected_type(val)
+            except (ValueError, TypeError):
+                return self._defaults[name]
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name.startswith('_'):
+            super().__setattr__(name, value)
+        elif name in self._defaults:
+            hints = get_type_hints(self.__class__)
+            expected_type = hints.get(name, type(value))
+            try:
+                self._data[name] = expected_type(value)
+                self.save()
+            except (ValueError, TypeError):
+                raise ValueError(f"Invalid type for {name}: expected {expected_type.__name__}")
+        else:
+            super().__setattr__(name, value)
