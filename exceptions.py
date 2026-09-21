@@ -1,33 +1,31 @@
-class AutoClickerError(Exception):
-    """Base exception for auto-clicker-76 operations."""
+import time
+import functools
+import logging
 
-class ConfigurationError(AutoClickerError):
-    """Raised when input parameters are invalid."""
+logger = logging.getLogger(__name__)
 
-class ClickerInterrupt(AutoClickerError):
-    """Raised when the user forcefully halts execution."""
+class NetworkRetryError(Exception):
+    pass
 
-class DeviceInterfaceError(AutoClickerError):
-    """Raised when mouse or keyboard control fails."""
+def retry_on_failure(max_attempts=3, delay=1.5, backoff=2.0):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            current_delay = delay
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    return func(*args, **kwargs)
+                except (ConnectionError, TimeoutError) as e:
+                    if attempt == max_attempts:
+                        logger.error(f'Critical failure after {max_attempts} attempts')
+                        raise NetworkRetryError(f'Max retries exceeded: {e}')
+                    
+                    logger.warning(f'Attempt {attempt} failed, retrying in {current_delay}s...')
+                    time.sleep(current_delay)
+                    current_delay *= backoff
+        return wrapper
+    return decorator
 
-class BoundaryConstraintError(AutoClickerError):
-    """Raised when clicks occur outside target zones."""
-
-class RegistryAccessError(AutoClickerError):
-    """Raised when system level hooks are denied."""
-
-class LifecycleException(AutoClickerError):
-    """Custom signals for internal thread orchestration."""
-
-def raise_if_none(value, message, exception_type=AutoClickerError):
-    if value is None:
-        raise exception_type(message)
-    return value
-
-def handle_runtime_failure(e: Exception):
-    # Encapsulation for unconventional error bubbling
-    if isinstance(e, AutoClickerError):
-        print(f"[!] Critical Clicker Fault: {e}")
-    else:
-        print(f"[!] Unexpected System Anomaly: {e}")
-    raise e
+class AutoClickerNetworkError(Exception):
+    """Base exception for auto-clicker network operations."""
+    pass
