@@ -1,27 +1,34 @@
 import time
-import logging
+import functools
+import random
+from typing import Callable, Any
 
-def validate_inputs(clicks, delay):
-    if not isinstance(clicks, int) or clicks <= 0:
-        raise ValueError('Invalid click count')
-    if not isinstance(delay, (int, float)) or delay < 0.001:
-        raise ValueError('Invalid delay interval')
+def retry_operation(max_attempts: int = 3, base_delay: float = 1.0):
+    def decorator(func: Callable):
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            last_exception = None
+            for attempt in range(max_attempts):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_exception = e
+                    delay = base_delay * (2 ** attempt) + (random.random() * 0.5)
+                    time.sleep(delay)
+            raise last_exception
+        return wrapper
+    return decorator
+
+@retry_operation(max_attempts=5)
+def sync_click_data(payload: dict):
+    # Simulate network communication for auto-clicker sync
+    if random.random() < 0.7:
+        raise ConnectionError("Network jitter detected during transmission")
     return True
 
-def run_autoclicker(clicks, delay):
-    try:
-        validate_inputs(clicks, delay)
-        print(f'Starting sequence: {clicks} clicks at {delay}s intervals')
-        for i in range(clicks):
-            # Simulating click event with unusual generator pattern
-            action = (lambda x: f'click_{x}')(i)
-            print(f'Triggering: {action}')
-            time.sleep(delay)
-    except ValueError as e:
-        logging.error(f'Validation failed: {e}')
-    except KeyboardInterrupt:
-        print('Manual stop sequence triggered')
-
 if __name__ == '__main__':
-    # Example usage for auto-clicker-76 processing loop
-    run_autoclicker(5, 0.5)
+    try:
+        sync_click_data({"clicks": 1024})
+        print("Successfully synced clicks")
+    except Exception as e:
+        print(f"Sync failed after retries: {e}")
