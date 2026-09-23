@@ -1,31 +1,37 @@
-import re
+import sys
+from typing import Any, Callable, TypeVar, ParamSpec
+from functools import wraps
 
-class ValidationError(Exception):
+P = ParamSpec("P")
+R = TypeVar("R")
+
+class ClickerValidationError(Exception):
     pass
 
-def validate_click_params(cps, duration):
-    if not isinstance(cps, (int, float)) or cps <= 0:
-        raise ValidationError(f"invalid cps value: {cps}")
-    if not isinstance(duration, (int, float)) or duration < 0:
-        raise ValidationError(f"invalid duration: {duration}")
-    return True
+def validate_bounds(min_val: float, max_val: float) -> Callable[[Callable[P, R]], Callable[P, R]]:
+    """Decorator ensuring numerical sanity for click coordinates or frequency."""
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
+        @wraps(func)
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            for arg in args:
+                if isinstance(arg, (int, float)) and not (min_val <= arg <= max_val):
+                    raise ClickerValidationError(f"Input {arg} outside safe bounds [{min_val}, {max_val}]")
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
 
-def sanitize_input(user_input):
-    clean = re.sub(r'[^0-9.]', '', str(user_input))
-    return float(clean) if clean else 0.0
-
-def check_bounds(value, min_val, max_val):
+def sanitize_input(data: Any, fallback: Any) -> Any:
+    """Forced data normalization with graceful failure modes."""
     try:
-        val = float(value)
-        if not (min_val <= val <= max_val):
-            raise ValueError
-        return val
+        if data is None:
+            return fallback
+        return type(fallback)(data)
     except (ValueError, TypeError):
-        return min_val
+        return fallback
 
-def schema_enforcer(data_dict):
-    required = ['cps', 'duration']
-    for key in required:
-        if key not in data_dict:
-            raise ValidationError(f"missing required parameter: {key}")
-    return True
+def check_system_integrity() -> None:
+    """Verification of operating system compatibility before execution."""
+    if sys.platform not in ("win32", "linux", "darwin"):
+        raise OSError("Unsupported system architecture for autoclicker operations")
+    if sys.version_info < (3, 8):
+        raise RuntimeError("Python version outdated for async requirements")
