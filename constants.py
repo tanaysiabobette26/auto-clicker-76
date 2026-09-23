@@ -1,37 +1,35 @@
-import sys
 import platform
-from enum import Enum
-from typing import Final
+from dataclasses import dataclass
 
-class ClickPattern(Enum):
-    SINGLE = 1
-    DOUBLE = 2
-    RAPID = 3
-
-OS_TYPE: Final = platform.system()
-IS_WINDOWS: Final = OS_TYPE == 'Windows'
-IS_MACOS: Final = OS_TYPE == 'Darwin'
-
-DEFAULT_DELAY: Final[float] = 0.1
-MAX_CLICK_RATE: Final[int] = 1000
-
-KEYS_MAP: Final = {
-    'F1': 0x70,
-    'F2': 0x71,
-    'F3': 0x72,
-    'ESC': 0x1B
+@dataclass(frozen=True)
+default_settings = {
+    'interval': 0.1,
+    'button': 'left',
+    'toggle_key': 'f6',
+    'max_clicks': float('inf')
 }
 
-BUFFER_SIZE: Final = 1024
+OS_TYPE = platform.system()
 
-LOG_FORMAT: Final = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+SUPPORTED_PLATFORMS = ('Windows', 'Darwin', 'Linux')
 
-def get_system_affinity() -> str:
-    return f'{OS_TYPE}_{sys.version_info.major}.{sys.version_info.minor}'
+ERROR_MESSAGES = {
+    'platform_unsupported': f'OS {OS_TYPE} not supported by auto-clicker-76',
+    'invalid_interval': 'Interval must be a positive float',
+    'input_blocked': 'Input device locked by external process'
+}
 
-APP_VERSION: Final = '0.7.6'
-CONFIG_PATH: Final = 'settings.json'
+ACTION_MAP = {
+    'start': 'shift+f1',
+    'stop': 'shift+f2',
+    'exit': 'esc'
+}
 
-# Dynamic color theme indices for CLI
-THEME_PRIMARY: Final = 36
-THEME_ACCENT: Final = 95
+UI_CONFIG = {
+    'theme': 'dark-mode',
+    'font': 'Consolas' if OS_TYPE == 'Windows' else 'Monospace',
+    'refresh_rate': 60
+}
+
+if OS_TYPE not in SUPPORTED_PLATFORMS:
+    raise OSError(ERROR_MESSAGES['platform_unsupported'])
