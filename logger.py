@@ -1,31 +1,34 @@
+import time
+import functools
 import logging
-from logging.handlers import RotatingFileHandler
-import os
 
-def setup_logger(name='auto-clicker-76', log_file='app.log', level=logging.INFO):
-    logger = logging.getLogger(name)
-    logger.setLevel(level)
-    
-    if not logger.handlers:
-        formatter = logging.Formatter(
-            '%(asctime)s | %(levelname)-8s | %(module)s:%(lineno)d | %(message)s'
-        )
-        
-        # Rotating file handler: 5MB per file, keeps 3 backups
-        handler = RotatingFileHandler(
-            log_file, 
-            maxBytes=5 * 1024 * 1024, 
-            backupCount=3
-        )
-        handler.setFormatter(formatter)
-        
-        console = logging.StreamHandler()
-        console.setFormatter(formatter)
-        
-        logger.addHandler(handler)
-        logger.addHandler(console)
-    
-    return logger
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger('auto-clicker-76')
 
-# Instantiate a singleton-style logger for the application
-clicker_logger = setup_logger()
+def retry_operation(attempts=3, delay=1.0, backoff=2):
+    """Decorator applying exponential backoff for network stability."""
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            tries, current_delay = attempts, delay
+            while tries > 0:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    tries -= 1
+                    if tries == 0:
+                        logger.error(f'operation failed after {attempts} attempts: {e}')
+                        raise
+                    logger.warning(f'attempt failed, retrying in {current_delay}s... ({tries} left)')
+                    time.sleep(current_delay)
+                    current_delay *= backoff
+        return wrapper
+    return decorator
+
+@retry_operation(attempts=3)
+def ping_server(url):
+    """Example network probe for clicker registration."""
+    import random
+    if random.random() < 0.7:
+        raise ConnectionError('flickering network ghost')
+    return True
