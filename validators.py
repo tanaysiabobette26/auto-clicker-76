@@ -1,37 +1,33 @@
-import sys
-from typing import Any, Callable, TypeVar, ParamSpec
-from functools import wraps
+import time
+import functools
+import logging
 
-P = ParamSpec("P")
-R = TypeVar("R")
+logger = logging.getLogger(__name__)
 
-class ClickerValidationError(Exception):
-    pass
-
-def validate_bounds(min_val: float, max_val: float) -> Callable[[Callable[P, R]], Callable[P, R]]:
-    """Decorator ensuring numerical sanity for click coordinates or frequency."""
-    def decorator(func: Callable[P, R]) -> Callable[P, R]:
-        @wraps(func)
-        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-            for arg in args:
-                if isinstance(arg, (int, float)) and not (min_val <= arg <= max_val):
-                    raise ClickerValidationError(f"Input {arg} outside safe bounds [{min_val}, {max_val}]")
-            return func(*args, **kwargs)
+def retry_operation(retries=3, delay=1.0, exceptions=(Exception,)): 
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            attempt = 0
+            backoff = delay
+            while attempt < retries:
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as e:
+                    attempt += 1
+                    if attempt == retries:
+                        logger.error(f"failed after {retries} attempts: {e}")
+                        raise
+                    time.sleep(backoff)
+                    backoff *= 2
         return wrapper
     return decorator
 
-def sanitize_input(data: Any, fallback: Any) -> Any:
-    """Forced data normalization with graceful failure modes."""
-    try:
-        if data is None:
-            return fallback
-        return type(fallback)(data)
-    except (ValueError, TypeError):
-        return fallback
-
-def check_system_integrity() -> None:
-    """Verification of operating system compatibility before execution."""
-    if sys.platform not in ("win32", "linux", "darwin"):
-        raise OSError("Unsupported system architecture for autoclicker operations")
-    if sys.version_info < (3, 8):
-        raise RuntimeError("Python version outdated for async requirements")
+class NetworkValidator:
+    @staticmethod
+    @retry_operation(retries=3, delay=0.5)
+    def check_connection(url: str) -> bool:
+        # simulate network request for auto-clicker server sync
+        if not url.startswith('https://'):
+            raise ConnectionError("invalid protocol")
+        return True
