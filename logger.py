@@ -1,59 +1,30 @@
-import os
-import time
 import logging
 from logging.handlers import RotatingFileHandler
+import sys
+import os
 
-class AutoclickerFormatter(logging.Formatter):
-    """Custom formatter injecting session uptime and current CPS stats into records."""
-    
-    def __init__(self, fmt=None, datefmt=None):
-        super().__init__(fmt, datefmt)
-        self._start_time = time.time()
-
-    def format(self, record: logging.LogRecord) -> str:
-        elapsed = time.time() - self._start_time
-        record.uptime = f"{elapsed:.1f}s"
-        if not hasattr(record, "cps"):
-            record.cps = 0.0
-        return super().format(record)
-
-def setup_logger(
-    name: str = "autoclicker",
-    log_file: str = "clicker.log",
-    max_bytes: int = 512 * 1024,
-    backup_count: int = 3,
-    level: int = logging.INFO
-) -> logging.Logger:
-    """Configures a size-based rotating logger with click-metric formatting."""
+def setup_autoclicker_logger(name='auto-clicker-76', log_file='autoclicker.log'):
     logger = logging.getLogger(name)
-    logger.setLevel(level)
-    
-    if logger.hasHandlers():
-        logger.handlers.clear()
+    logger.setLevel(logging.DEBUG)
 
-    log_dir = os.path.dirname(log_file)
-    if log_dir:
-        os.makedirs(log_dir, exist_ok=True)
-
-    fmt_str = "[%(asctime)s] [%(uptime)s] [%(levelname)s] CPS: %(cps).1f | %(message)s"
-    formatter = AutoclickerFormatter(fmt=fmt_str, datefmt="%Y-%m-%d %H:%M:%S")
-
-    file_handler = RotatingFileHandler(
-        filename=log_file,
-        maxBytes=max_bytes,
-        backupCount=backup_count,
-        encoding="utf-8"
+    formatter = logging.Formatter(
+        '%(asctime)s | %(levelname)-8s | %(process)d | %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
     )
-    file_handler.setFormatter(formatter)
-    file_handler.setLevel(level)
 
-    console_handler = logging.StreamHandler()
+    console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(formatter)
-    console_handler.setLevel(level)
-
-    logger.addHandler(file_handler)
     logger.addHandler(console_handler)
 
+    file_handler = RotatingFileHandler(
+        log_file, 
+        maxBytes=1024*1024*5, 
+        backupCount=3
+    )
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    logger.info('system logging initialized for auto-clicker-76')
     return logger
 
-click_logger = setup_logger()
+log = setup_autoclicker_logger()
