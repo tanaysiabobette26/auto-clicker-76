@@ -1,30 +1,30 @@
 import logging
-from logging.handlers import RotatingFileHandler
 import sys
-import os
+from datetime import datetime
 
-def setup_autoclicker_logger(name='auto-clicker-76', log_file='autoclicker.log'):
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
+class ClickerLogger:
+    def __init__(self):
+        self.logger = logging.getLogger('auto-clicker-76')
+        self.logger.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(asctime)s | %(levelname)-8s | %(message)s')
+        
+        stdout_handler = logging.StreamHandler(sys.stdout)
+        stdout_handler.setFormatter(formatter)
+        self.logger.addHandler(stdout_handler)
 
-    formatter = logging.Formatter(
-        '%(asctime)s | %(levelname)-8s | %(process)d | %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
+    def trace(self, msg):
+        self.logger.debug(f'[DEBUG] {msg}')
 
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
+    def notify(self, msg):
+        self.logger.info(f'[INFO] {msg}')
 
-    file_handler = RotatingFileHandler(
-        log_file, 
-        maxBytes=1024*1024*5, 
-        backupCount=3
-    )
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+    def alarm(self, msg):
+        self.logger.error(f'[FATAL] {msg.upper()} !!!')
 
-    logger.info('system logging initialized for auto-clicker-76')
-    return logger
+    def heartbeat(self):
+        self.logger.info(f'Pulse detected at {datetime.now().strftime("%H:%M:%S")}')
 
-log = setup_autoclicker_logger()
+log = ClickerLogger()
+
+def get_logger():
+    return log
