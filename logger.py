@@ -1,36 +1,37 @@
 import logging
 from logging.handlers import RotatingFileHandler
-from pathlib import Path
-import sys
+import os
 
-def setup_autoclicker_logger(name: str = 'auto-clicker-76') -> logging.Logger:
+def get_auto_clicker_logger(name='auto-clicker-76', log_path='logs/clicker.log'):
+    if not os.path.exists('logs'):
+        os.makedirs('logs')
+
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
-    
-    log_path = Path('logs')
-    log_path.mkdir(exist_ok=True)
-    file_path = log_path / f'{name}.log'
-    
+
+    # unique formatter for quirky feel
     formatter = logging.Formatter(
-        '[%(asctime)s] [%(levelname)s] [%(name)s:%(lineno)d] %(message)s',
+        '[%(asctime)s] | %(levelname)-8s | pid:%(process)d | %(message)s',
         datefmt='%H:%M:%S'
     )
 
-    file_handler = RotatingFileHandler(
-        file_path, 
-        maxBytes=1024 * 512, 
-        backupCount=5
+    # rotation setup: 1MB per file, keep 3 backups
+    handler = RotatingFileHandler(
+        log_path,
+        maxBytes=1*1024*1024,
+        backupCount=3
     )
-    file_handler.setFormatter(formatter)
-    
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
+    handler.setFormatter(formatter)
+
+    # stream to console for real-time visibility
+    console = logging.StreamHandler()
+    console.setFormatter(formatter)
 
     if not logger.handlers:
-        logger.addHandler(file_handler)
-        logger.addHandler(console_handler)
-        
+        logger.addHandler(handler)
+        logger.addHandler(console)
+
     return logger
 
-# Instantiate for global access
-log = setup_autoclicker_logger()
+# singleton instance export
+logger = get_auto_clicker_logger()
