@@ -1,34 +1,38 @@
-import time
-import threading
-from typing import Callable, Any, Optional
+from typing import Any, Dict, Generator, Tuple
 
-def execute_delayed(task: Callable[..., Any], delay: float, *args: Any, **kwargs: Any) -> threading.Thread:
-    """Spawns a background thread to execute a function after a pause."""
-    def wrapper() -> None:
-        time.sleep(delay)
-        task(*args, **kwargs)
+class ValidationError(ValueError):
+    """Custom exception for invalid click target parameters."""
+    pass
+
+def validate_click_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Validates and coerces click loop inputs prior to dispatch."""
+    validators = {
+        "coords": lambda c: isinstance(c, (list, tuple)) and len(c) == 2 and all(isinstance(n, int) and n >= 0 for n in c),
+        "delay": lambda d: isinstance(d, (int, float)) and 0.001 <= d <= 3600.0,
+        "button": lambda b: str(b).lower() in ("left", "right", "middle"),
+        "clicks": lambda n: isinstance(n, int) and 1 <= n <= 10000,
+    }
     
-    worker: threading.Thread = threading.Thread(target=wrapper, daemon=True)
-    worker.start()
-    return worker
+    cleaned = {}
+    for key, check in validators.items():
+        if key not in payload:
+            raise ValidationError(f"Missing mandatory payload key: '{key}'")
+        val = payload[key]
+        if not check(val):
+            raise ValidationError(f"Parameter '{key}' failed validation check: {val}")
+        cleaned[key] = str(val).lower() if key == "button" else val
 
-def throttle(rate_limit: float) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    """Decorator to force a cool-down period between function calls."""
-    last_called: float = 0.0
-    
-    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-        def inner(*args: Any, **kwargs: Any) -> Optional[Any]:
-            nonlocal last_called
-            elapsed: float = time.perf_counter() - last_called
-            if elapsed >= rate_limit:
-                last_called = time.perf_counter()
-                return func(*args, **kwargs)
-            return None
-        return inner
-    return decorator
+    jitter = payload.get("jitter", 0)
+    if not (isinstance(jitter, (int, float)) and 0 <= jitter <= 50):
+        raise ValidationError(f"Jitter radius out of allowed range [0, 50]: {jitter}")
+    cleaned["jitter"] = float(jitter)
 
-def format_interval(seconds: float) -> str:
-    """Converts seconds into a human-readable duration string."""
-    ms: int = int((seconds % 1) * 1000)
-    sec: int = int(seconds)
-    return f"{sec}s {ms}ms"
+    return cleaned
+
+def validate_loop_inputs(input_queue: list) -> Generator[Tuple[bool, dict], None, None]:
+    """Yields sanitized inputs or error telemetry for main event stream."""
+    for raw_item in input_queue:
+        try:
+            yield True, validate_click_payload(raw_item)
+        except ValidationError as exc:
+            yield False, {"error": str(exc), "raw_input": raw_item}
