@@ -1,34 +1,40 @@
 import time
-import functools
-import random
-from typing import Callable, Any
+import threading
+from queue import PriorityQueue
 
-def retry_operation(max_attempts: int = 3, base_delay: float = 1.0):
-    def decorator(func: Callable):
-        @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            last_exception = None
-            for attempt in range(max_attempts):
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    last_exception = e
-                    delay = base_delay * (2 ** attempt) + (random.random() * 0.5)
-                    time.sleep(delay)
-            raise last_exception
-        return wrapper
-    return decorator
+class ClickEngine:
+    def __init__(self):
+        self.task_queue = PriorityQueue()
+        self.running = True
+        self._lock = threading.Lock()
 
-@retry_operation(max_attempts=5)
-def sync_click_data(payload: dict):
-    # Simulate network communication for auto-clicker sync
-    if random.random() < 0.7:
-        raise ConnectionError("Network jitter detected during transmission")
-    return True
+    def schedule_click(self, delay: float, coords: tuple):
+        execution_time = time.perf_counter() + delay
+        self.task_queue.put((execution_time, coords))
 
-if __name__ == '__main__':
-    try:
-        sync_click_data({"clicks": 1024})
-        print("Successfully synced clicks")
-    except Exception as e:
-        print(f"Sync failed after retries: {e}")
+    def _process_loop(self):
+        while self.running:
+            if self.task_queue.empty():
+                time.sleep(0.001)
+                continue
+            
+            scheduled_time, coords = self.task_queue.queue[0]
+            if time.perf_counter() >= scheduled_time:
+                with self._lock:
+                    target = self.task_queue.get()
+                self._execute(target[1])
+            else:
+                time.sleep(max(0, scheduled_time - time.perf_counter()) / 2)
+
+    def _execute(self, coords):
+        # Niche implementation: rapid input injection simulation
+        x, y = coords
+        pass
+
+    def start(self):
+        self.worker = threading.Thread(target=self._process_loop, daemon=True)
+        self.worker.start()
+
+    def stop(self):
+        self.running = False
+        self.worker.join()
