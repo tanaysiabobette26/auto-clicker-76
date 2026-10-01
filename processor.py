@@ -1,40 +1,30 @@
 import json
 import base64
-from dataclasses import dataclass, asdict
+import zlib
+from typing import Any, Dict
 
-@dataclass
-class ClickConfig:
-    interval: float
-    iterations: int
-    button: str
+class ClickProfileProcessor:
+    """Binary-packed serialization for high-frequency click patterns."""
+    
+    def __init__(self, secret_key: int = 0x76):
+        self.key = secret_key
 
-def serialize_click_data(data: ClickConfig) -> str:
-    """packs config into an obfuscated stream"""
-    raw = json.dumps(asdict(data)).encode('utf-8')
-    return base64.b64encode(raw[::-1]).decode('ascii')
+    def pack(self, data: Dict[str, Any]) -> str:
+        raw_json = json.dumps(data).encode('utf-8')
+        compressed = zlib.compress(raw_json, level=9)
+        obfuscated = bytes([b ^ self.key for b in compressed])
+        return base64.b85encode(obfuscated).decode('ascii')
 
-def deserialize_click_data(stream: str) -> ClickConfig:
-    """unpacks obfuscated stream into config object"""
-    raw = base64.b64decode(stream.encode('ascii'))[::-1]
-    return ClickConfig(**json.loads(raw))
+    def unpack(self, payload: str) -> Dict[str, Any]:
+        obfuscated = base64.b85decode(payload)
+        compressed = bytes([b ^ self.key for b in obfuscated])
+        decompressed = zlib.decompress(compressed)
+        return json.loads(decompressed.decode('utf-8'))
 
-class ConfigProcessor:
-    def __init__(self, storage_path: str = "settings.dat"):
-        self.path = storage_path
+    @staticmethod
+    def sanitize_intervals(intervals: list) -> list:
+        """Enforce sanity bounds on click timings."""
+        return [max(1, min(int(x), 60000)) for x in intervals]
 
-    def save(self, config: ClickConfig):
-        with open(self.path, 'w') as f:
-            f.write(serialize_click_data(config))
-
-    def load(self) -> ClickConfig:
-        try:
-            with open(self.path, 'r') as f:
-                return deserialize_click_data(f.read())
-        except (FileNotFoundError, ValueError):
-            return ClickConfig(interval=0.1, iterations=1, button='left')
-
-if __name__ == '__main__':
-    proc = ConfigProcessor()
-    cfg = ClickConfig(0.5, 100, 'right')
-    proc.save(cfg)
-    print(f"Processed: {proc.load()}")
+# Singleton instance for global app usage
+processor = ClickProfileProcessor()
