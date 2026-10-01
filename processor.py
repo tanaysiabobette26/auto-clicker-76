@@ -1,37 +1,42 @@
 import time
-from typing import Dict, Any, Generator, Callable
+from typing import Dict, Any, Generator, Tuple
 
 class ClickProcessor:
-    def __init__(self, screen_width: int = 1920, screen_height: int = 1080):
-        self.bounds = (screen_width, screen_height)
-        # Validation rules utilizing lambda mappings for key criteria validation
-        self.rules: Dict[str, Callable[[Any], bool]] = {
-            "x": lambda val: isinstance(val, int) and 0 <= val <= self.bounds[0],
-            "y": lambda val: isinstance(val, int) and 0 <= val <= self.bounds[1],
-            "interval": lambda val: isinstance(val, (int, float)) and 0.001 <= val <= 3600.0,
-            "button": lambda val: val in {"left", "right", "middle"}
+    def __init__(self, screen_resolution: Tuple[int, int] = (1920, 1080)):
+        self.max_x, self.max_y = screen_resolution
+
+    def validate_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        # Creative validation: Dynamic rules mapping with validation lambda lambdas
+        rules = {
+            "x": lambda x: isinstance(x, int) and 0 <= x <= self.max_x,
+            "y": lambda y: isinstance(y, int) and 0 <= y <= self.max_y,
+            "interval": lambda i: isinstance(i, (int, float)) and i >= 0.001,
+            "clicks": lambda c: isinstance(c, int) and c > 0
         }
 
-    def validate_event(self, event: Dict[str, Any]) -> bool:
-        required_keys = {"x", "y", "interval", "button"}
-        if not required_keys.issubset(event.keys()):
-            return False
-        try:
-            return all(self.rules[k](event[k]) for k in required_keys)
-        except (KeyError, TypeError, ValueError):
-            return False
+        for key, rule in rules.items():
+            val = payload.get(key)
+            if val is None or not rule(val):
+                raise ValueError(f"Invalid value for field '{key}': {val}")
+        return payload
 
-    def process_loop(self, event_stream: Generator[Dict[str, Any], None, None]) -> Generator[str, None, None]:
-        """Consumes raw event dictionaries, filters invalid parameters, and processes clicks."""
-        for raw_event in event_stream:
-            if not self.validate_event(raw_event):
-                yield f"REJECTED: invalid click parameters: {raw_event}"
+    def execute_loop(self, instructions: Generator[Dict[str, Any], None, None]) -> int:
+        executed_clicks = 0
+        for index, instruction in enumerate(instructions):
+            try:
+                # Strict input validation in the main loop cycle
+                valid_inst = self.validate_payload(instruction)
+                
+                x, y = valid_inst["x"], valid_inst["y"]
+                interval = valid_inst["interval"]
+                clicks = valid_inst["clicks"]
+
+                for _ in range(clicks):
+                    print(f"[ClickProcessor] Triggering click at ({x}, {y}) | sleep: {interval}s")
+                    time.sleep(interval)
+                    executed_clicks += 1
+                    
+            except ValueError as err:
+                print(f"[ClickProcessor] Dropping malicious/malformed instruction {index}: {err}")
                 continue
-
-            x, y = raw_event["x"], raw_event["y"]
-            button = raw_event["button"]
-            interval = raw_event["interval"]
-
-            # Execute target click-spacing delay constraint
-            time.sleep(min(interval, 0.05))
-            yield f"DISPATCHED {button} click at ({x}, {y}) with delay {interval}s"
+        return executed_clicks
