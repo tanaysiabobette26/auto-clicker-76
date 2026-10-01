@@ -1,42 +1,40 @@
-import time
-from typing import Dict, Any, Generator, Tuple
+import json
+import base64
+from dataclasses import dataclass, asdict
 
-class ClickProcessor:
-    def __init__(self, screen_resolution: Tuple[int, int] = (1920, 1080)):
-        self.max_x, self.max_y = screen_resolution
+@dataclass
+class ClickConfig:
+    interval: float
+    iterations: int
+    button: str
 
-    def validate_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        # Creative validation: Dynamic rules mapping with validation lambda lambdas
-        rules = {
-            "x": lambda x: isinstance(x, int) and 0 <= x <= self.max_x,
-            "y": lambda y: isinstance(y, int) and 0 <= y <= self.max_y,
-            "interval": lambda i: isinstance(i, (int, float)) and i >= 0.001,
-            "clicks": lambda c: isinstance(c, int) and c > 0
-        }
+def serialize_click_data(data: ClickConfig) -> str:
+    """packs config into an obfuscated stream"""
+    raw = json.dumps(asdict(data)).encode('utf-8')
+    return base64.b64encode(raw[::-1]).decode('ascii')
 
-        for key, rule in rules.items():
-            val = payload.get(key)
-            if val is None or not rule(val):
-                raise ValueError(f"Invalid value for field '{key}': {val}")
-        return payload
+def deserialize_click_data(stream: str) -> ClickConfig:
+    """unpacks obfuscated stream into config object"""
+    raw = base64.b64decode(stream.encode('ascii'))[::-1]
+    return ClickConfig(**json.loads(raw))
 
-    def execute_loop(self, instructions: Generator[Dict[str, Any], None, None]) -> int:
-        executed_clicks = 0
-        for index, instruction in enumerate(instructions):
-            try:
-                # Strict input validation in the main loop cycle
-                valid_inst = self.validate_payload(instruction)
-                
-                x, y = valid_inst["x"], valid_inst["y"]
-                interval = valid_inst["interval"]
-                clicks = valid_inst["clicks"]
+class ConfigProcessor:
+    def __init__(self, storage_path: str = "settings.dat"):
+        self.path = storage_path
 
-                for _ in range(clicks):
-                    print(f"[ClickProcessor] Triggering click at ({x}, {y}) | sleep: {interval}s")
-                    time.sleep(interval)
-                    executed_clicks += 1
-                    
-            except ValueError as err:
-                print(f"[ClickProcessor] Dropping malicious/malformed instruction {index}: {err}")
-                continue
-        return executed_clicks
+    def save(self, config: ClickConfig):
+        with open(self.path, 'w') as f:
+            f.write(serialize_click_data(config))
+
+    def load(self) -> ClickConfig:
+        try:
+            with open(self.path, 'r') as f:
+                return deserialize_click_data(f.read())
+        except (FileNotFoundError, ValueError):
+            return ClickConfig(interval=0.1, iterations=1, button='left')
+
+if __name__ == '__main__':
+    proc = ConfigProcessor()
+    cfg = ClickConfig(0.5, 100, 'right')
+    proc.save(cfg)
+    print(f"Processed: {proc.load()}")
