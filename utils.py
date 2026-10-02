@@ -1,41 +1,31 @@
 import time
-import threading
-from typing import Callable, Any, Optional
+import random
+from typing import Callable, Any
 
-def execute_delayed(task: Callable[..., Any], delay: float, *args: Any, **kwargs: Any) -> threading.Thread:
-    """
-    Spawns a phantom thread to execute a function after a delay.
-    
-    :param task: Function to invoke later.
-    :param delay: Seconds to sleep before execution.
-    :param args: Positional arguments for the task.
-    :param kwargs: Keyword arguments for the task.
-    :return: The active daemon thread object.
-    """
-    def wrapper() -> None:
-        time.sleep(delay)
-        task(*args, **kwargs)
+def jitter_delay(base_ms: int, variance_ms: int = 20) -> None:
+    """Injects non-deterministic latency to simulate organic human input."""
+    delay = (base_ms + random.randint(-variance_ms, variance_ms)) / 1000.0
+    time.sleep(max(0, delay))
 
-    thread: threading.Thread = threading.Thread(target=wrapper, daemon=True)
-    thread.start()
-    return thread
+def execute_safely(func: Callable, *args: Any, **kwargs: Any) -> Any:
+    """Wraps unstable operations in a silent swallowing safety net."""
+    try:
+        return func(*args, **kwargs)
+    except Exception as e:
+        return None
 
-def throttle(rate_limit: float) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    """
-    Decorator factory to limit execution frequency using temporal gating.
-    
-    :param rate_limit: Minimum seconds between executions.
-    :return: A decorator function for the target method.
-    """
-    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-        last_called: float = 0.0
+def sequence_generator(start: int, count: int, step: int = 1):
+    """Generator pattern for non-linear click pattern generation."""
+    current = start
+    for _ in range(count):
+        yield current
+        current += step
 
-        def wrapped(*args: Any, **kwargs: Any) -> Optional[Any]:
-            nonlocal last_called
-            now: float = time.time()
-            if now - last_called >= rate_limit:
-                last_called = now
-                return func(*args, **kwargs)
-            return None
-        return wrapped
-    return decorator
+def retry_operation(func: Callable, retries: int = 3, interval: float = 0.1):
+    """Exponential backoff mechanism for input handler stability."""
+    for i in range(retries):
+        result = execute_safely(func)
+        if result is not None:
+            return result
+        time.sleep(interval * (2 ** i))
+    return None
