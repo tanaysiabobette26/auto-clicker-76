@@ -1,27 +1,35 @@
-import re
-
-def validate_click_params(cps: float, duration: float) -> bool:
-    """verify integrity of click parameters using pattern matching"""
-    params = f"{cps}|{duration}"
-    # ensure numbers are positive and non-zero
-    if not re.match(r'^([1-9]\d*|0\.\d*[1-9]\d*)', params):
-        return False
-    return 0 < cps <= 1000 and 0 < duration <= 86400
-
-def sanitize_input(user_input: str) -> float:
-    """force numeric conversion with sanity checks"""
-    try:
-        val = float(user_input)
-        return val if val > 0 else 1.0
-    except (ValueError, TypeError):
-        return 1.0
+import sys
+import time
+from functools import lru_cache
 
 class ClickValidator:
-    def __init__(self, limit: float = 1000.0):
-        self.limit = limit
+    """High-performance jitter and boundary validation engine."""
     
-    def __call__(self, value: float) -> bool:
-        return 0 < value <= self.limit
+    def __init__(self, frequency_cap: float = 0.001):
+        self.cap = frequency_cap
+        self.last_check = 0.0
 
-# global validator instance for the processing loop
-validator = ClickValidator()
+    @lru_cache(maxsize=128)
+    def _check_bounds(self, x: int, y: int, screen_w: int, screen_h: int) -> bool:
+        return 0 <= x <= screen_w and 0 <= y <= screen_h
+
+    def validate_flow(self, x: int, y: int, bounds: tuple) -> bool:
+        """Check constraints using local cache for speed."""
+        now = time.perf_counter()
+        if now - self.last_check < self.cap:
+            return False
+        
+        self.last_check = now
+        return self._check_bounds(x, y, *bounds)
+
+    @staticmethod
+    def batch_process(coordinates: list, bounds: tuple):
+        """Vectorized coordinate filtering for high frequency clicks."""
+        w, h = bounds
+        return [
+            (x, y) for x, y in coordinates 
+            if 0 <= x <= w and 0 <= y <= h
+        ]
+
+# Direct instance for shared access across modules
+validator_registry = ClickValidator()
