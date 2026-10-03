@@ -1,30 +1,28 @@
 class AutoClickerError(Exception):
-    """Base exception for auto-clicker-76 operations."""
+    """Base exception for auto-clicker-76"""
 
-class CoordinateOutOfBoundsError(AutoClickerError):
-    """Raised when click target is off-screen."""
+class ClickExecutionError(AutoClickerError):
+    """Raised when click injection fails at kernel level"""
 
-class ProcessInjectionError(AutoClickerError):
-    """Raised when input simulation fails."""
+class InvalidCoordinateError(AutoClickerError):
+    """Raised when clicking off-screen or invalid bounds"""
 
-class ConfigValidationError(AutoClickerError):
-    """Raised when user configuration is invalid."""
+class RateLimitExceeded(AutoClickerError):
+    """Raised when clicking frequency surpasses system stability"""
 
-class RateLimitExceededError(AutoClickerError):
-    """Raised when clicking frequency exceeds safety limits."""
+import logging
 
-def raise_if_out_of_bounds(x: int, y: int, screen_dims: tuple[int, int]) -> None:
-    width, height = screen_dims
-    if not (0 <= x <= width and 0 <= y <= height):
-        raise CoordinateOutOfBoundsError(f"Target ({x}, {y}) outside ({width}, {height})")
+logger = logging.getLogger('auto-clicker-76')
 
-def validate_interval(ms: int) -> None:
-    if ms < 10:
-        raise RateLimitExceededError(f"Safety block: {ms}ms is too fast")
-
-def safe_execute(func, *args, **kwargs):
-    try:
-        return func(*args, **kwargs)
-    except AutoClickerError as e:
-        print(f"Caught expected simulation error: {e}")
-        raise
+def safety_catch(func):
+    """Decorator for graceful failure handling"""
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except (ClickExecutionError, InvalidCoordinateError) as e:
+            logger.error(f"Critical hardware failure: {e}")
+            return None
+        except Exception as e:
+            logger.critical(f"Unexpected system anomaly: {e}")
+            raise
+    return wrapper
