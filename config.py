@@ -1,27 +1,39 @@
+import json
 import os
-from typing import Final, Dict, Any
+from typing import Any, Dict
 
-class ClickerConfig:
-    DEFAULT_INTERVAL: Final[float] = 0.01
-    MAX_CPS: Final[int] = 1000
-    TOGGLE_KEY: Final[str] = 'f6'
-    
-    def __init__(self) -> None:
-        self._settings: Dict[str, Any] = {
-            "interval": float(os.getenv("CLICK_INT", self.DEFAULT_INTERVAL)),
-            "hotkey": os.getenv("CLICK_KEY", self.TOGGLE_KEY),
-            "mode": "toggle"
-        }
+DEFAULT_SETTINGS = {
+    "interval": 0.1,
+    "button": "left",
+    "hotkey": "f6",
+    "repeat_mode": "toggle"
+}
 
-    @property
-    def settings(self) -> Dict[str, Any]:
-        return self._settings
+class ConfigLoader:
+    def __init__(self, filepath: str = "config.json"):
+        self.filepath = filepath
+        self.settings = DEFAULT_SETTINGS.copy()
 
-    def validate_speed(self, val: float) -> float:
-        return max(0.001, min(val, 1.0 / self.MAX_CPS))
+    def load(self) -> Dict[str, Any]:
+        if os.path.exists(self.filepath):
+            try:
+                with open(self.filepath, "r") as f:
+                    loaded_data = json.load(f)
+                    self.settings.update(loaded_data)
+            except (json.JSONDecodeError, IOError):
+                self._save_defaults()
+        else:
+            self._save_defaults()
+        return self.settings
 
-    def __repr__(self) -> str:
-        return f"<Config(interval={self._settings['interval']})>"
+    def _save_defaults(self) -> None:
+        try:
+            with open(self.filepath, "w") as f:
+                json.dump(self.settings, f, indent=4)
+        except IOError:
+            pass
 
-def get_config() -> ClickerConfig:
-    return ClickerConfig()
+    def update(self, key: str, value: Any) -> None:
+        self.settings[key] = value
+        with open(self.filepath, "w") as f:
+            json.dump(self.settings, f, indent=4)
