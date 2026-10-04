@@ -1,30 +1,47 @@
-import json
-import base64
-import zlib
-from typing import Any, Dict
+import time
+from collections import deque
+from typing import Callable, Optional
 
-class ClickProfileProcessor:
-    """Binary-packed serialization for high-frequency click patterns."""
-    
-    def __init__(self, secret_key: int = 0x76):
-        self.key = secret_key
+class EventProcessor:
+    def __init__(self, target_frequency: float = 500.0):
+        self.target_ns = int(1_000_000_000 / target_frequency)
+        self.queue = deque(maxlen=4096)
+        self._last_stamp = time.perf_counter_ns()
+        self._drift_compensation = 0
 
-    def pack(self, data: Dict[str, Any]) -> str:
-        raw_json = json.dumps(data).encode('utf-8')
-        compressed = zlib.compress(raw_json, level=9)
-        obfuscated = bytes([b ^ self.key for b in compressed])
-        return base64.b85encode(obfuscated).decode('ascii')
+    def push(self, callback: Callable[[], None]) -> bool:
+        if len(self.queue) < self.queue.maxlen:
+            self.queue.append(callback)
+            return True
+        return False
 
-    def unpack(self, payload: str) -> Dict[str, Any]:
-        obfuscated = base64.b85decode(payload)
-        compressed = bytes([b ^ self.key for b in obfuscated])
-        decompressed = zlib.decompress(compressed)
-        return json.loads(decompressed.decode('utf-8'))
+    def execute_tick(self) -> int:
+        if not self.queue:
+            return 0
+            
+        now = time.perf_counter_ns()
+        elapsed = now - self._last_stamp + self._drift_compensation
+        
+        ticks_due = elapsed // self.target_ns
+        if ticks_due <= 0:
+            return 0
+            
+        self._drift_compensation = elapsed % self.target_ns
+        self._last_stamp = now
+        
+        processed = 0
+        limit = min(ticks_due, len(self.queue))
+        
+        for _ in range(limit):
+            fn = self.queue.popleft()
+            fn()
+            processed += 1
+            
+        return processed
 
-    @staticmethod
-    def sanitize_intervals(intervals: list) -> list:
-        """Enforce sanity bounds on click timings."""
-        return [max(1, min(int(x), 60000)) for x in intervals]
-
-# Singleton instance for global app usage
-processor = ClickProfileProcessor()
+    def drain_all(self) -> int:
+        count = 0
+        while self.queue:
+            self.queue.popleft()()
+            count += 1
+        return count
