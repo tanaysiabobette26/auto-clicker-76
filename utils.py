@@ -1,31 +1,42 @@
 import time
+import functools
 import random
-from typing import Callable, Any
+import logging
 
-def jitter_delay(base_ms: int, variance_ms: int = 20) -> None:
-    """Injects non-deterministic latency to simulate organic human input."""
-    delay = (base_ms + random.randint(-variance_ms, variance_ms)) / 1000.0
-    time.sleep(max(0, delay))
+logger = logging.getLogger(__name__)
 
-def execute_safely(func: Callable, *args: Any, **kwargs: Any) -> Any:
-    """Wraps unstable operations in a silent swallowing safety net."""
+def resilient_network_call(max_retries=3, base_delay=1.0, jitter=True):
+    """Decorator applying exponential backoff for network instability."""
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            attempts = 0
+            while attempts < max_retries:
+                try:
+                    return func(*args, **kwargs)
+                except (ConnectionError, TimeoutError) as e:
+                    attempts += 1
+                    if attempts >= max_retries:
+                        logger.error(f"Network operation failed after {attempts} attempts")
+                        raise e
+                    
+                    sleep_time = base_delay * (2 ** (attempts - 1))
+                    if jitter:
+                        sleep_time += random.uniform(0, 0.5 * sleep_time)
+                    
+                    logger.warning(f"Retrying {func.__name__} in {sleep_time:.2f}s...")
+                    time.sleep(sleep_time)
+        return wrapper
+    return decorator
+
+def validate_connection_stability(target_url: str) -> bool:
+    """
+    Heuristic check to determine if network is suitable for clicking sync.
+    Checks for basic DNS and socket resolution overhead.
+    """
+    import socket
     try:
-        return func(*args, **kwargs)
-    except Exception as e:
-        return None
-
-def sequence_generator(start: int, count: int, step: int = 1):
-    """Generator pattern for non-linear click pattern generation."""
-    current = start
-    for _ in range(count):
-        yield current
-        current += step
-
-def retry_operation(func: Callable, retries: int = 3, interval: float = 0.1):
-    """Exponential backoff mechanism for input handler stability."""
-    for i in range(retries):
-        result = execute_safely(func)
-        if result is not None:
-            return result
-        time.sleep(interval * (2 ** i))
-    return None
+        socket.create_connection(("8.8.8.8", 53), timeout=2)
+        return True
+    except OSError:
+        return False
