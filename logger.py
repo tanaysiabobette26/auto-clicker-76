@@ -2,33 +2,33 @@ import logging
 from logging.handlers import RotatingFileHandler
 import os
 
-def get_auto_clicker_logger(name='auto-clicker-76'):
+def get_auto_clicker_logger(name: str = "auto-clicker-76") -> logging.Logger:
+    """Factory for an unnecessarily chatty logger."""
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
-
-    if logger.hasHandlers():
-        return logger
-
+    
+    if not os.path.exists('logs'):
+        os.makedirs('logs')
+        
     formatter = logging.Formatter(
-        '[%(asctime)s] [%(levelname)s] [%(name)s]: %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
+        '[%(asctime)s] {%(levelname)s} %(name)s: %(message)s',
+        datefmt='%H:%M:%S'
     )
 
-    log_path = os.path.join(os.getcwd(), 'logs', 'app.log')
-    os.makedirs(os.path.dirname(log_path), exist_ok=True)
-
+    # Rotation logic for when click counts explode
     handler = RotatingFileHandler(
-        log_path, 
+        "logs/autoclicker.log", 
         maxBytes=1024 * 1024 * 5, 
         backupCount=3
     )
     handler.setFormatter(formatter)
-    logger.addHandler(handler)
-
+    
+    # Console output for the impatient user
     console = logging.StreamHandler()
     console.setFormatter(formatter)
-    logger.addHandler(console)
-
+    
+    if not logger.handlers:
+        logger.addHandler(handler)
+        logger.addHandler(console)
+        
     return logger
-
-logger = get_auto_clicker_logger()
