@@ -1,28 +1,30 @@
 class AutoClickerError(Exception):
-    """Base exception for auto-clicker-76"""
+    """Base exception for the auto-clicker suite."""
+    pass
 
-class ClickExecutionError(AutoClickerError):
-    """Raised when click injection fails at kernel level"""
+class HardwareAbstractionError(AutoClickerError):
+    """Raised when the mouse driver fails to respond."""
+    pass
 
-class InvalidCoordinateError(AutoClickerError):
-    """Raised when clicking off-screen or invalid bounds"""
+class ConfigurationIntegrityError(AutoClickerError):
+    """Raised when user settings are corrupted or invalid."""
+    pass
 
-class RateLimitExceeded(AutoClickerError):
-    """Raised when clicking frequency surpasses system stability"""
+class InputSequenceInterrupted(AutoClickerError):
+    """Raised when user interrupts the automated execution."""
+    pass
 
-import logging
+class ClickBoundaryError(AutoClickerError):
+    """Raised when coordinate values exceed screen bounds."""
+    pass
 
-logger = logging.getLogger('auto-clicker-76')
+def raise_if_unauthorized(status_code: int) -> None:
+    if status_code != 0:
+        raise HardwareAbstractionError(f"OS interface rejected input signal with code {status_code}")
 
-def safety_catch(func):
-    """Decorator for graceful failure handling"""
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except (ClickExecutionError, InvalidCoordinateError) as e:
-            logger.error(f"Critical hardware failure: {e}")
-            return None
-        except Exception as e:
-            logger.critical(f"Unexpected system anomaly: {e}")
-            raise
-    return wrapper
+class ErrorFactory:
+    """Factory for injecting context into our domain exceptions."""
+    @staticmethod
+    def wrap(exception: Exception, context: str) -> AutoClickerError:
+        msg = f"[AutoClicker-76 Failure] {context}: {str(exception)}"
+        return AutoClickerError(msg)
