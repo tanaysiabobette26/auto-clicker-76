@@ -1,19 +1,18 @@
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
 # auto-clicker-76
 
-`auto-clicker-76` is a lightweight, high-performance Python automation tool designed for precise microsecond mouse clicking and custom hotkey triggering. It bypasses basic pattern detection using randomized click intervals while maintaining minimal CPU overhead during extended background sessions.
+`auto-clicker-76` is a high-performance, Python-based automation tool designed for precision mouse clicking tasks. It provides a lightweight solution for repetitive workflows, offering low-latency execution and an intuitive configuration interface.
+
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 ## Features
-
-- **Microsecond Precision:** Configurable click rates ranging from 1 click per hour up to 1,000 clicks per second using non-blocking thread scheduling.
-- **Humanized Randomization:** Built-in Gaussian noise generator to simulate natural human click intervals and prevent automated bot flag triggers.
-- **Global Hotkey Binding:** Instant toggle functionality using customizable hotkeys (default `F8`) that register system-wide, even when unfocused.
-- **Coordinate Locking:** Option to lock clicks to a specific screen pixel or allow free-roaming clicks at the current cursor position.
+*   **Dynamic CPS Control:** Adjustable clicking speed ranging from 1 to 1000 clicks per second.
+*   **Smart Hotkey Mapping:** Start and stop automation instantly using customizable global keyboard shortcuts.
+*   **Anti-Detection Jitter:** Optional randomization feature to vary click timing, mimicking human interaction patterns.
+*   **Cross-Platform Core:** Built using `pynput` for seamless operation on Windows, macOS, and Linux environments.
 
 ## Installation
 
-Clone the repository and install the required dependencies:
+Ensure you have Python 3.8+ installed. Clone the repository and install the required dependencies:
 
 ```bash
 git clone https://github.com/Developer/auto-clicker-76.git
@@ -21,33 +20,31 @@ cd auto-clicker-76
 pip install -r requirements.txt
 ```
 
-*Dependencies: `pynput >= 1.7.6`*
-
 ## Usage
 
-Run the clicker via the command-line interface with custom parameters:
+To launch the clicker with default settings, run the following command in your terminal:
 
 ```bash
-python main.py --cps 50 --button left --randomize --key f8
+python main.py --interval 0.01 --button left
 ```
 
-Alternatively, import the engine directly into your Python scripts:
+### Basic Implementation
+You can also integrate the core clicking logic directly into your own Python scripts:
 
 ```python
-from autoclicker import ClickEngine
+from clicker import AutoClicker
 
-# Initialize clicker: 20 clicks per second, left button, with interval variance
-app = ClickEngine(
-    cps=20,
-    button='left',
-    randomize=True,
-    hotkey='f8'
-)
+# Initialize with 50ms delay between clicks
+bot = AutoClicker(interval=0.05, button='left')
 
-# Start listening for the global toggle hotkey
-app.start()
+# Toggle clicking
+bot.start()
+# ... perform actions ...
+bot.stop()
 ```
 
-## License
+## Configuration
+All hotkeys and randomized jitter settings can be adjusted in the `config.json` file located in the root directory. Modify these parameters to suit your specific desktop automation requirements.
 
+## License
 Distributed under the MIT License. See `LICENSE` for more information.
