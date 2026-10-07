@@ -1,40 +1,43 @@
-import logging
-import functools
-import time
+import json
+import pathlib
+from typing import Any, Dict
 
-logger = logging.getLogger('auto-clicker-76')
+class ClickConfigHandler:
+    def __init__(self, file_path: str = "click_data.json"):
+        self.path = pathlib.Path(file_path)
 
-class ClickerError(Exception):
-    pass
+    def load_click_sequence(self) -> Dict[str, Any]:
+        if not self.path.exists():
+            return {"version": 1.0, "clicks": []}
+        with open(self.path, "r") as f:
+            return json.load(f)
 
-def robust_click(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        attempts = 0
-        max_attempts = 3
-        while attempts < max_attempts:
-            try:
-                return func(*args, **kwargs)
-            except (PermissionError, OSError) as e:
-                attempts += 1
-                logger.warning(f'click event failed, retry {attempts}/{max_attempts}: {e}')
-                time.sleep(0.5 * attempts)
-        raise ClickerError(f'critical failure after {max_attempts} attempts')
-    return wrapper
+    def save_click_sequence(self, data: Dict[str, Any]) -> bool:
+        try:
+            with open(self.path, "w") as f:
+                json.dump(data, f, indent=4, sort_keys=True)
+            return True
+        except (IOError, TypeError):
+            return False
 
-def validate_coordinates(x, y):
-    try:
-        x, y = int(x), int(y)
-        if x < 0 or y < 0:
-            raise ValueError('negative coordinates')
-        return x, y
-    except (ValueError, TypeError) as e:
-        logger.error(f'invalid coordinate mapping: {e}')
-        return 0, 0
+    def transform_to_coords(self, sequence: list) -> list:
+        return [{"x": s[0], "y": s[1], "d": s[2]} for s in sequence]
 
-def safe_execute(task_fn, *args):
-    try:
-        return task_fn(*args)
-    except Exception as e:
-        logger.critical(f'unhandled execution error: {e}')
-        return None
+def singleton_storage(cls):
+    instances = {}
+    def get_instance(*args, **kwargs):
+        if cls not in instances:
+            instances[cls] = cls(*args, **kwargs)
+        return instances[cls]
+    return get_instance
+
+@singleton_storage
+class StateVault:
+    def __init__(self):
+        self._store = {}
+
+    def stash(self, key: str, value: Any):
+        self._store[key] = value
+
+    def retrieve(self, key: str):
+        return self._store.get(key)
