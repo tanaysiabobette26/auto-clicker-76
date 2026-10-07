@@ -1,26 +1,40 @@
 import time
-import functools
-import random
-from typing import Callable, Any
+import threading
+from typing import Callable, Optional
 
-def retry_operation(max_attempts: int = 3, base_delay: float = 1.0) -> Callable:
-    """Decorator implementing exponential backoff with jitter for network stability."""
+class ClickExecutor:
+    def __init__(self, interval: float = 0.1):
+        self.interval = interval
+        self._running = False
+        self._thread: Optional[threading.Thread] = None
+
+    def _worker(self, action: Callable[[], None]) -> None:
+        while self._running:
+            action()
+            time.sleep(self.interval)
+
+    def start(self, action: Callable[[], None]) -> None:
+        if not self._running:
+            self._running = True
+            self._thread = threading.Thread(target=self._worker, args=(action,), daemon=True)
+            self._thread.start()
+
+    def stop(self) -> None:
+        self._running = False
+        if self._thread:
+            self._thread.join()
+
+def debounce(wait: float) -> Callable:
     def decorator(func: Callable) -> Callable:
-        @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            last_exception = None
-            for attempt in range(max_attempts):
-                try:
-                    return func(*args, **kwargs)
-                except (ConnectionError, TimeoutError) as e:
-                    last_exception = e
-                    delay = (base_delay * (2 ** attempt)) + (random.random() * 0.1)
-                    time.sleep(delay)
-            raise last_exception or Exception("Operation failed after retries")
+        last_called = [0.0]
+        def wrapper(*args, **kwargs):
+            now = time.time()
+            if now - last_called[0] >= wait:
+                last_called[0] = now
+                return func(*args, **kwargs)
         return wrapper
     return decorator
 
-def execute_network_call(func: Callable, *args: Any, **kwargs: Any) -> Any:
-    """Functional wrapper for quick retry application."""
-    retry_wrapper = retry_operation()(func)
-    return retry_wrapper(*args, **kwargs)
+def format_runtime(seconds: float) -> str:
+    m, s = divmod(int(seconds), 60)
+    return f"{m:02d}m {s:02d}s elapsed"
