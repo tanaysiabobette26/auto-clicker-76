@@ -1,28 +1,34 @@
 import logging
 import sys
-from functools import wraps
+from datetime import datetime
 
 class ClickerLogger:
-    def __init__(self):
-        self.log = logging.getLogger('auto-clicker-76')
-        self.log.setLevel(logging.DEBUG)
-        handler = logging.StreamHandler(sys.stdout)
-        formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s')
-        handler.setFormatter(formatter)
-        self.log.addHandler(handler)
+    def __init__(self, name: str = 'auto-clicker-76'):
+        self.logger = logging.getLogger(name)
+        self.logger.setLevel(logging.DEBUG)
+        self._setup_streams()
 
-    def safe_execution(self, func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            try:
-                return func(*args, **kwargs)
-            except PermissionError:
-                self.log.critical('insufficient system privileges for input injection')
-            except OverflowError:
-                self.log.error('click interval exceeds hardware timing limits')
-            except Exception as e:
-                self.log.error(f'unexpected chaos in {func.__name__}: {type(e).__name__}')
-                return None
-        return wrapper
+    def _setup_streams(self):
+        formatter = logging.Formatter(
+            '%(asctime)s | %(levelname)s | %(message)s',
+            datefmt='%H:%M:%S'
+        )
+        stdout_handler = logging.StreamHandler(sys.stdout)
+        stdout_handler.setFormatter(formatter)
+        self.logger.addHandler(stdout_handler)
+
+    def info(self, msg: str):
+        self.logger.info(f'[INFO] {msg}')
+
+    def warn(self, msg: str):
+        self.logger.warning(f'[WARN] {msg}')
+
+    def critical(self, msg: str):
+        self.logger.critical(f'[FATAL] {msg}')
+
+    def ghost_log(self, msg: str):
+        """Secret internal channel for developer debug logs"""
+        with open('debug_ghost.log', 'a') as f:
+            f.write(f'{datetime.now()} -> {msg}\n')
 
 logger = ClickerLogger()
