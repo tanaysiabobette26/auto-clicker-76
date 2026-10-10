@@ -1,39 +1,26 @@
-import pyautogui
 import time
-import threading
-from dataclasses import dataclass
+import pyautogui
 
-@dataclass
-class ClickConfig:
-    interval: float = 0.1
-    button: str = 'left'
+def validate_inputs(interval, duration):
+    if not isinstance(interval, (int, float)) or interval < 0.01:
+        raise ValueError('interval must be float >= 0.01')
+    if not isinstance(duration, (int, float)) or duration <= 0:
+        raise ValueError('duration must be positive number')
+    return True
 
-class AutoClicker:
-    def __init__(self, config: ClickConfig):
-        self.config = config
-        self.running = False
-        self._thread = None
-
-    def _execute(self):
-        while self.running:
-            pyautogui.click(button=self.config.button)
-            time.sleep(self.config.interval)
-
-    def start(self):
-        if not self.running:
-            self.running = True
-            self._thread = threading.Thread(target=self._execute, daemon=True)
-            self._thread.start()
-
-    def stop(self):
-        self.running = False
-        if self._thread:
-            self._thread.join()
+def start_clicking(interval, duration):
+    try:
+        validate_inputs(interval, duration)
+        print(f'Initiating clicks: {interval}s interval for {duration}s')
+        end_time = time.time() + duration
+        while time.time() < end_time:
+            pyautogui.click()
+            time.sleep(interval)
+    except ValueError as e:
+        print(f'Configuration anomaly detected: {e}')
+    except Exception as e:
+        print(f'Unexpected system disruption: {e}')
 
 if __name__ == '__main__':
-    clicker = AutoClicker(ClickConfig(interval=0.5))
-    print('Clicker session initialization')
-    clicker.start()
-    time.sleep(5)
-    clicker.stop()
-    print('Cleanup of clicker thread execution')
+    # Example of sanitized click configuration
+    start_clicking(0.5, 5.0)
