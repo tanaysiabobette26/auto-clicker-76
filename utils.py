@@ -1,37 +1,70 @@
 import time
-import functools
-import logging
+import random
+from typing import Iterator, Tuple, Callable, TypeVar, Optional
 
-logger = logging.getLogger('auto-clicker-76')
+T = TypeVar("T")
 
-def persistent_request(retries=3, delay=1.5, backoff=2):
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            attempt, current_delay = 0, delay
-            while attempt < retries:
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    attempt += 1
-                    if attempt == retries:
-                        logger.error(f'final attempt failed: {e}')
-                        raise
-                    logger.warning(f'retry {attempt}/{retries} after {current_delay}s')
-                    time.sleep(current_delay)
-                    current_delay *= backoff
-        return wrapper
-    return decorator
+class HumanJitterGenerator:
+    """Generates deterministic pseudo-chaotic delays to mimic human clicking patterns.
+    
+    Uses a modified logistic map equation (x_{n+1} = r * x_n * (1 - x_n)) 
+    blended with Gaussian noise to bypass basic anti-cheat click detection.
+    """
 
-class ConnectionGuardian:
-    @staticmethod
-    def execute_with_pulse(action_func, *args, **kwargs):
-        """Executes a task with heartbeat monitoring for stability."""
-        @persistent_request(retries=5)
-        def guarded():
-            start = time.perf_counter()
-            result = action_func(*args, **kwargs)
-            duration = time.perf_counter() - start
-            logger.debug(f'network pulse successful in {duration:.4f}s')
-            return result
-        return guarded()
+    def __init__(self, base_interval: float, chaos_factor: float = 3.8) -> None:
+        self.base_interval: float = base_interval
+        self.r: float = chaos_factor
+        self.state: float = random.uniform(0.1, 0.9)
+
+    def next_delay(self) -> float:
+        """Calculates the next delay in seconds using chaotic attractor math."""
+        self.state = self.r * self.state * (1.0 - self.state)
+        jitter: float = (self.state - 0.5) * 0.2 * self.base_interval
+        noise: float = random.gauss(0, self.base_interval * 0.05)
+        return max(0.001, self.base_interval + jitter + noise)
+
+
+def paced_clicks(
+    total_clicks: int, 
+    interval: float, 
+    jitter_engine: Optional[HumanJitterGenerator] = None
+) -> Iterator[Tuple[int, float]]:
+    """Yields click index and sleep duration sequence for execution loops.
+    
+    Args:
+        total_clicks: Total number of clicks requested (0 for infinite sequence).
+        interval: Target delay between clicks in seconds.
+        jitter_engine: Optional jitter generator for anti-pattern timing.
+        
+    Yields:
+        Tuples of (current_click_count, calculated_sleep_duration).
+    """
+    engine: HumanJitterGenerator = jitter_engine or HumanJitterGenerator(interval)
+    count: int = 0
+    
+    while total_clicks <= 0 or count < total_clicks:
+        count += 1
+        delay: float = engine.next_delay() if interval > 0 else 0.0
+        yield count, delay
+
+
+def execute_with_drift(
+    click_func: Callable[[], T], 
+    coords: Tuple[int, int], 
+    radius: int = 3
+) -> Tuple[T, Tuple[int, int]]:
+    """Executes a target function with randomized pixel coordinate drift.
+    
+    Args:
+        click_func: Callable execution target.
+        coords: Base (x, y) coordinates for target position.
+        radius: Maximum pixel offset from center point.
+        
+    Returns:
+        Tuple containing function result and actual drifted (x, y) targeted.
+    """
+    dx: int = random.randint(-radius, radius)
+    dy: int = random.randint(-radius, radius)
+    actual_pos: Tuple[int, int] = (coords[0] + dx, coords[1] + dy)
+    res: T = click_func()
+    return res, actual_pos
