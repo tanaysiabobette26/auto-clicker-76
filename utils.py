@@ -1,70 +1,66 @@
-import time
+import math
 import random
-from typing import Iterator, Tuple, Callable, TypeVar, Optional
-
-T = TypeVar("T")
-
-class HumanJitterGenerator:
-    """Generates deterministic pseudo-chaotic delays to mimic human clicking patterns.
-    
-    Uses a modified logistic map equation (x_{n+1} = r * x_n * (1 - x_n)) 
-    blended with Gaussian noise to bypass basic anti-cheat click detection.
-    """
-
-    def __init__(self, base_interval: float, chaos_factor: float = 3.8) -> None:
-        self.base_interval: float = base_interval
-        self.r: float = chaos_factor
-        self.state: float = random.uniform(0.1, 0.9)
-
-    def next_delay(self) -> float:
-        """Calculates the next delay in seconds using chaotic attractor math."""
-        self.state = self.r * self.state * (1.0 - self.state)
-        jitter: float = (self.state - 0.5) * 0.2 * self.base_interval
-        noise: float = random.gauss(0, self.base_interval * 0.05)
-        return max(0.001, self.base_interval + jitter + noise)
+from dataclasses import dataclass
+from typing import Generator, Optional
 
 
-def paced_clicks(
-    total_clicks: int, 
-    interval: float, 
-    jitter_engine: Optional[HumanJitterGenerator] = None
-) -> Iterator[Tuple[int, float]]:
-    """Yields click index and sleep duration sequence for execution loops.
-    
+@dataclass(frozen=True)
+class Point:
+    """Represents a 2D screen coordinate."""
+
+    x: int
+    y: int
+
+
+def humanized_jitter(base_interval: float, variance: float = 0.15) -> Generator[float, None, None]:
+    """Yield an infinite stream of click delays with simulated biometric fatigue.
+
     Args:
-        total_clicks: Total number of clicks requested (0 for infinite sequence).
-        interval: Target delay between clicks in seconds.
-        jitter_engine: Optional jitter generator for anti-pattern timing.
-        
+        base_interval: Target delay between clicks in seconds.
+        variance: Maximum deviation scale for noise insertion.
+
     Yields:
-        Tuples of (current_click_count, calculated_sleep_duration).
+        Floating-point delay in seconds.
     """
-    engine: HumanJitterGenerator = jitter_engine or HumanJitterGenerator(interval)
-    count: int = 0
-    
-    while total_clicks <= 0 or count < total_clicks:
-        count += 1
-        delay: float = engine.next_delay() if interval > 0 else 0.0
-        yield count, delay
+    phase: float = random.uniform(0.0, 2.0 * math.pi)
+    step: int = 0
+    while True:
+        fatigue: float = math.sin(phase + (step * 0.05)) * 0.2 * base_interval
+        noise: float = random.gauss(0, variance * base_interval)
+        delay: float = max(0.001, base_interval + fatigue + noise)
+        yield round(delay, 4)
+        step += 1
 
 
-def execute_with_drift(
-    click_func: Callable[[], T], 
-    coords: Tuple[int, int], 
-    radius: int = 3
-) -> Tuple[T, Tuple[int, int]]:
-    """Executes a target function with randomized pixel coordinate drift.
-    
+def scatter_target(center: Point, radius: int = 5, scatter: float = 0.8) -> Point:
+    """Calculate a randomized target point distributed around a center coordinate.
+
     Args:
-        click_func: Callable execution target.
-        coords: Base (x, y) coordinates for target position.
-        radius: Maximum pixel offset from center point.
-        
+        center: Primary Point target coordinate.
+        radius: Radius limit in pixels.
+        scatter: Multiplier for distribution density.
+
     Returns:
-        Tuple containing function result and actual drifted (x, y) targeted.
+        A new Point modified with spatial displacement.
     """
-    dx: int = random.randint(-radius, radius)
-    dy: int = random.randint(-radius, radius)
-    actual_pos: Tuple[int, int] = (coords[0] + dx, coords[1] + dy)
-    res: T = click_func()
-    return res, actual_pos
+    angle: float = random.uniform(0, 2.0 * math.pi)
+    dist: float = random.triangular(0, radius, radius * min(scatter, 1.0))
+    dx: int = int(round(dist * math.cos(angle)))
+    dy: int = int(round(dist * math.sin(angle)))
+    return Point(x=center.x + dx, y=center.y + dy)
+
+
+def parse_coordinate_string(raw: str) -> Optional[Point]:
+    """Parse raw coordinate text like '100,200' or '(100, 200)' into a Point.
+
+    Args:
+        raw: Input string with coordinate pair.
+
+    Returns:
+        Point instance if successfully parsed, None otherwise.
+    """
+    cleaned: str = raw.strip().strip("()")
+    parts: list[str] = [p.strip() for p in cleaned.split(",") if p.strip()]
+    if len(parts) == 2 and all(p.lstrip("-").isdigit() for p in parts):
+        return Point(x=int(parts[0]), y=int(parts[1]))
+    return None
