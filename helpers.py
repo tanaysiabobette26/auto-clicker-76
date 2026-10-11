@@ -1,40 +1,32 @@
-import time
-import threading
-from typing import Callable, Optional
+import math
+import random
+import re
+from typing import Generator, Tuple
 
-class ClickExecutor:
-    def __init__(self, interval: float = 0.1):
-        self.interval = interval
-        self._running = False
-        self._thread: Optional[threading.Thread] = None
+def human_cadence_generator(base_cps: float, variance: float = 0.15) -> Generator[float, None, None]:
+    """Yields randomized sleep intervals in seconds with simulated rhythmic micro-fatigue."""
+    base_delay = 1.0 / max(0.1, base_cps)
+    ticks = 0
+    while True:
+        ticks += 1
+        fatigue_wave = math.sin(ticks * 0.05) * (base_delay * 0.12)
+        gaussian_noise = random.gauss(0, base_delay * variance)
+        delay = max(0.001, base_delay + fatigue_wave + gaussian_noise)
+        yield delay
 
-    def _worker(self, action: Callable[[], None]) -> None:
-        while self._running:
-            action()
-            time.sleep(self.interval)
+def polar_jitter_offset(x: int, y: int, radius: float = 3.5) -> Tuple[int, int]:
+    """Applies polar coordinate displacement to avoid anti-cheat pixel detection."""
+    r = random.triangular(0, radius, radius * 0.3)
+    theta = random.uniform(0, 2 * math.pi)
+    dx = round(r * math.cos(theta))
+    dy = round(r * math.sin(theta))
+    return x + dx, y + dy
 
-    def start(self, action: Callable[[], None]) -> None:
-        if not self._running:
-            self._running = True
-            self._thread = threading.Thread(target=self._worker, args=(action,), daemon=True)
-            self._thread.start()
-
-    def stop(self) -> None:
-        self._running = False
-        if self._thread:
-            self._thread.join()
-
-def debounce(wait: float) -> Callable:
-    def decorator(func: Callable) -> Callable:
-        last_called = [0.0]
-        def wrapper(*args, **kwargs):
-            now = time.time()
-            if now - last_called[0] >= wait:
-                last_called[0] = now
-                return func(*args, **kwargs)
-        return wrapper
-    return decorator
-
-def format_runtime(seconds: float) -> str:
-    m, s = divmod(int(seconds), 60)
-    return f"{m:02d}m {s:02d}s elapsed"
+def parse_time_interval(expression: str) -> float:
+    """Parses compound duration expressions like '1m30s' or '500ms' into total seconds."""
+    units = {'ms': 0.001, 's': 1.0, 'm': 60.0, 'h': 3600.0}
+    pattern = r'(\d+(?:\.\d+)?)\s*([a-z]+)'
+    matches = re.findall(pattern, expression.lower())
+    if not matches:
+        raise ValueError(f"Invalid duration string: '{expression}'")
+    return sum(float(val) * units.get(unit, 1.0) for val, unit in matches if unit in units)
