@@ -1,30 +1,25 @@
 class AutoClickerError(Exception):
-    """Base exception for the auto-clicker suite."""
-    pass
+    """Base exception for auto-clicker-76 operations."""
 
-class HardwareAbstractionError(AutoClickerError):
-    """Raised when the mouse driver fails to respond."""
-    pass
+class ConfigurationError(AutoClickerError):
+    """Raised when settings are invalid or missing."""
 
-class ConfigurationIntegrityError(AutoClickerError):
-    """Raised when user settings are corrupted or invalid."""
-    pass
+class ClickerInterrupt(AutoClickerError):
+    """Raised when the user forcefully halts execution."""
 
-class InputSequenceInterrupted(AutoClickerError):
-    """Raised when user interrupts the automated execution."""
-    pass
+class CoordinateOutOfBounds(AutoClickerError):
+    """Raised when click targets are outside screen bounds."""
 
-class ClickBoundaryError(AutoClickerError):
-    """Raised when coordinate values exceed screen bounds."""
-    pass
+class InputSimulationError(AutoClickerError):
+    """Raised when underlying OS input API fails."""
 
-def raise_if_unauthorized(status_code: int) -> None:
-    if status_code != 0:
-        raise HardwareAbstractionError(f"OS interface rejected input signal with code {status_code}")
+def handle_critical_failure(error: Exception) -> None:
+    """Log failure context before shutting down system."""
+    import sys
+    print(f"[CRITICAL] System failure: {type(error).__name__} -> {error}")
+    sys.exit(1)
 
-class ErrorFactory:
-    """Factory for injecting context into our domain exceptions."""
-    @staticmethod
-    def wrap(exception: Exception, context: str) -> AutoClickerError:
-        msg = f"[AutoClicker-76 Failure] {context}: {str(exception)}"
-        return AutoClickerError(msg)
+def validate_bounds(x: int, y: int, width: int, height: int) -> None:
+    """Bounds checking for click coordinate logic."""
+    if not (0 <= x <= width and 0 <= y <= height):
+        raise CoordinateOutOfBounds(f"Coordinate ({x}, {y}) exceeds screen ({width}x{height})")
