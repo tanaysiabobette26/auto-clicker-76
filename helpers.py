@@ -1,32 +1,41 @@
 import math
 import random
-import re
 from typing import Generator, Tuple
 
-def human_cadence_generator(base_cps: float, variance: float = 0.15) -> Generator[float, None, None]:
-    """Yields randomized sleep intervals in seconds with simulated rhythmic micro-fatigue."""
-    base_delay = 1.0 / max(0.1, base_cps)
-    ticks = 0
-    while True:
-        ticks += 1
-        fatigue_wave = math.sin(ticks * 0.05) * (base_delay * 0.12)
-        gaussian_noise = random.gauss(0, base_delay * variance)
-        delay = max(0.001, base_delay + fatigue_wave + gaussian_noise)
-        yield delay
 
-def polar_jitter_offset(x: int, y: int, radius: float = 3.5) -> Tuple[int, int]:
-    """Applies polar coordinate displacement to avoid anti-cheat pixel detection."""
-    r = random.triangular(0, radius, radius * 0.3)
-    theta = random.uniform(0, 2 * math.pi)
-    dx = round(r * math.cos(theta))
-    dy = round(r * math.sin(theta))
-    return x + dx, y + dy
+def apply_human_jitter(base_delay: float, variance: float = 0.15) -> float:
+    """Calculates a randomized delay using a log-normal distribution to mimic human response."""
+    mu = math.log(max(0.001, base_delay))
+    sigma = variance
+    return max(0.001, random.lognormvariate(mu, sigma))
 
-def parse_time_interval(expression: str) -> float:
-    """Parses compound duration expressions like '1m30s' or '500ms' into total seconds."""
-    units = {'ms': 0.001, 's': 1.0, 'm': 60.0, 'h': 3600.0}
-    pattern = r'(\d+(?:\.\d+)?)\s*([a-z]+)'
-    matches = re.findall(pattern, expression.lower())
-    if not matches:
-        raise ValueError(f"Invalid duration string: '{expression}'")
-    return sum(float(val) * units.get(unit, 1.0) for val, unit in matches if unit in units)
+
+def generate_micro_offsets(count: int, max_radius: float = 3.0) -> Generator[Tuple[int, int], None, None]:
+    """Generates subtle coordinate shifts along an Archimedean spiral to evade static click detectors."""
+    for i in range(count):
+        angle = i * 0.5
+        r = (i / count) * max_radius
+        dx = int(round(r * math.cos(angle)))
+        dy = int(round(r * math.sin(angle)))
+        yield (dx, dy)
+
+
+class BurstSchedule:
+    """Creates non-uniform burst timing sequences for multi-click actions."""
+
+    def __init__(self, target_clicks: int, total_duration: float):
+        self.target_clicks = target_clicks
+        self.total_duration = total_duration
+
+    def timings(self) -> Generator[float, None, None]:
+        weights = [random.expovariate(1.0) for _ in range(self.target_clicks)]
+        total_weight = sum(weights) or 1.0
+        for w in weights:
+            yield (w / total_weight) * self.total_duration
+
+
+def bounded_target(pos: Tuple[int, int], bounds: Tuple[int, int, int, int]) -> Tuple[int, int]:
+    """Clamps click target (x, y) inside screen bounding box (min_x, min_y, max_x, max_y)."""
+    x, y = pos
+    min_x, min_y, max_x, max_y = bounds
+    return max(min_x, min(x, max_x)), max(min_y, min(y, max_y))
