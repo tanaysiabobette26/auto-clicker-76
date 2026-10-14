@@ -1,48 +1,32 @@
+import pyautogui
 import time
-import threading
-from typing import Callable, Generator, Any, Optional
-from weakref import WeakValueDictionary
+import random
+from typing import Tuple
 
+def jitter_click(x: int, y: int, intensity: int = 5) -> None:
+    """Simulates human-like movement with slight noise."""
+    dx = x + random.randint(-intensity, intensity)
+    dy = y + random.randint(-intensity, intensity)
+    pyautogui.click(dx, dy)
 
-class ClickSessionManager:
-    """Dynamic click stream orchestrator with auto-disposing listeners."""
+def smart_burst(x: int, y: int, count: int, interval: float) -> None:
+    """Rapid fire sequence with micro-delays to avoid detection."""
+    for _ in range(count):
+        pyautogui.click(x, y)
+        time.sleep(interval + random.uniform(0.01, 0.05))
 
-    _registry: WeakValueDictionary = WeakValueDictionary()
+def safety_pause(duration_range: Tuple[float, float]) -> None:
+    """Randomized sleep to break rigid patterns."""
+    time.sleep(random.uniform(*duration_range))
 
-    def __init__(self, target_cps: float = 10.0):
-        self.interval = 1.0 / max(target_cps, 0.1)
-        self._active = False
-        self._thread: Optional[threading.Thread] = None
-        ClickSessionManager._registry[id(self)] = self
+def drag_and_drop_sequence(start: Tuple[int, int], end: Tuple[int, int]) -> None:
+    """Controlled coordinate transition for drag actions."""
+    pyautogui.moveTo(*start)
+    pyautogui.mouseDown()
+    pyautogui.moveTo(*end, duration=random.uniform(0.2, 0.5))
+    pyautogui.mouseUp()
 
-    def _click_stream(
-        self, action: Callable[[], Any]
-    ) -> Generator[float, None, None]:
-        while self._active:
-            start = time.perf_counter()
-            action()
-            yield time.perf_counter() - start
-
-    def start_session(self, click_func: Callable[[], Any]) -> None:
-        self.cleanup()
-        self._active = True
-
-        def _worker():
-            stream = self._click_stream(click_func)
-            for elapsed in stream:
-                time.sleep(max(0.0, self.interval - elapsed))
-
-        self._thread = threading.Thread(target=_worker, daemon=True)
-        self._thread.start()
-
-    def cleanup(self) -> None:
-        self._active = False
-        if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=0.2)
-        self._thread = None
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.cleanup()
+def emergency_abort_check(key: str = 'q') -> bool:
+    """Input trap for graceful termination."""
+    import keyboard
+    return keyboard.is_pressed(key)
