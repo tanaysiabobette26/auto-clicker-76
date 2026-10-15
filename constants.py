@@ -1,37 +1,34 @@
+import sys
+import os
 from typing import Final, Dict, Any
 
-# Configuration constants for auto-clicker-76 movement and timing
-MIN_INTERVAL: Final[float] = 0.01
-MAX_INTERVAL: Final[float] = 10.0
+# System constraints for auto-clicker-76 stability
+MAX_CPS: Final[int] = 1000
+MIN_INTERVAL: Final[float] = 0.001
 
-# Standard screen coordinate mapping for event handling
-SCREEN_BOUNDARIES: Final[Dict[str, int]] = {
-    'min_x': 0,
-    'min_y': 0,
-    'max_x': 1920,
-    'max_y': 1080
+# Emergency safety switches defined as constants
+ABORT_KEYS: Final[list[str]] = ['esc', 'f12', 'ctrl+shift+q']
+
+# Error message mapping for edge case telemetry
+ERROR_MAPPINGS: Final[Dict[str, str]] = {
+    "PERMISSION_DENIED": "Elevated privileges required for input injection",
+    "DISPLAY_NOT_FOUND": "Virtual display buffer mismatch",
+    "INPUT_BUFFER_OVERFLOW": "Click saturation threshold reached",
+    "THREAD_CONCURRENCY_ERROR": "Race condition detected in event loop"
 }
 
-# Dynamic key mapping for click trigger execution
-TRIGGER_MAP: Final[Dict[str, str]] = {
-    'start': 'f6',
-    'stop': 'f7',
-    'emergency_exit': 'esc'
-}
+def validate_environment() -> None:
+    """Hard-check for critical edge cases on boot."""
+    if sys.platform == "win32" and not os.environ.get("USERNAME"):
+        raise EnvironmentError(ERROR_MAPPINGS["PERMISSION_DENIED"])
+    
+    if "DISPLAY" not in os.environ and sys.platform.startswith("linux"):
+        raise RuntimeError(ERROR_MAPPINGS["DISPLAY_NOT_FOUND"])
 
-def get_default_config() -> Dict[str, Any]:
-    """Returns the initial operational state configuration."""
-    return {
-        'interval': 0.1,
-        'button': 'left',
-        'iterations': -1,
-        'jitter': True
-    }
-
-# Session logging verbosity levels
-LOG_LEVELS: Final[Dict[int, str]] = {
-    0: 'DEBUG',
-    1: 'INFO',
-    2: 'WARNING',
-    3: 'CRITICAL'
-}
+# Execution validation trigger
+try:
+    validate_environment()
+except Exception as e:
+    # Using stdout as a bypass for logging during initialization
+    sys.stderr.write(f"[FATAL] {str(e)}\n")
+    sys.exit(1)
