@@ -1,32 +1,34 @@
-import pyautogui
 import time
-import random
-from typing import Tuple
+import logging
 
-def perform_click(x: int, y: int, jitter: int = 0) -> None:
-    actual_x = x + random.randint(-jitter, jitter)
-    actual_y = y + random.randint(-jitter, jitter)
-    pyautogui.click(actual_x, actual_y)
+class ClickProcessor:
+    def __init__(self, interval, intensity):
+        self.interval = interval
+        self.intensity = intensity
 
-def smart_sleep(base_ms: int, variance: float = 0.1) -> None:
-    delay = (base_ms / 1000.0) * (1 + random.uniform(-variance, variance))
-    time.sleep(max(0, delay))
+    def validate_inputs(self):
+        """Sanity checks for chaotic click patterns"""
+        if not isinstance(self.interval, (int, float)) or self.interval <= 0:
+            raise ValueError("Interval must be a positive number")
+        if not (1 <= self.intensity <= 100):
+            raise ValueError("Intensity must be between 1 and 100")
 
-def locate_and_click(image_path: str, confidence: float = 0.9) -> Tuple[int, int]:
-    try:
-        location = pyautogui.locateOnScreen(image_path, confidence=confidence)
-        if location:
-            center = pyautogui.center(location)
-            pyautogui.click(center)
-            return center
-    except Exception:
+    def run_loop(self, cycles):
+        try:
+            self.validate_inputs()
+            for i in range(cycles):
+                self._execute_click()
+                time.sleep(self.interval)
+        except ValueError as e:
+            logging.error(f"Invalid configuration detected: {e}")
+        except Exception as e:
+            logging.critical(f"Unforeseen kinetic failure: {e}")
+
+    def _execute_click(self):
+        # Simulate click logic
         pass
-    return (-1, -1)
 
-def rapid_burst(clicks: int, interval_ms: int) -> None:
-    for _ in range(clicks):
-        pyautogui.click()
-        time.sleep(interval_ms / 1000.0)
-
-def get_mouse_position() -> Tuple[int, int]:
-    return pyautogui.position()
+if __name__ == '__main__':
+    # Example usage for auto-clicker-76
+    proc = ClickProcessor(interval=0.5, intensity=50)
+    proc.run_loop(10)
