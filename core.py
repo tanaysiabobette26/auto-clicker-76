@@ -1,34 +1,29 @@
 import time
-import threading
-from ctypes import windll
+import random
+from functools import wraps
 
-class ClickEngine:
-    def __init__(self, interval=0.01):
-        self.interval = interval
-        self.running = False
-        self._mouse_event = windll.user32.mouse_event
-        self._lock = threading.Lock()
+def resilient_network_request(max_attempts=3, base_delay=1):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            last_ex = None
+            for attempt in range(max_attempts):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_ex = e
+                    sleep_time = (base_delay * (2 ** attempt)) + random.uniform(0, 0.5)
+                    time.sleep(sleep_time)
+            raise last_ex
+        return wrapper
+    return decorator
 
-    def _click_payload(self):
-        while self.running:
-            self._mouse_event(0x0002 | 0x0004, 0, 0, 0, 0)
-            time.sleep(self.interval)
+@resilient_network_request(max_attempts=4)
+def ping_server(url):
+    # Simulate volatile network activity for the auto-clicker heartbeat
+    if random.random() < 0.7:
+        raise ConnectionError("Server unreachable")
+    return {"status": "ok", "latency": "low"}
 
-    def start(self):
-        with self._lock:
-            if not self.running:
-                self.running = True
-                threading.Thread(target=self._click_payload, daemon=True).start()
-
-    def stop(self):
-        self.running = False
-
-class OptimizedClicker(ClickEngine):
-    """High-frequency injection using ctypes and thread isolation"""
-    def _click_payload(self):
-        _m = self._mouse_event
-        _s = time.sleep
-        _i = self.interval
-        while self.running:
-            _m(0x0002 | 0x0004, 0, 0, 0, 0)
-            _s(_i)
+if __name__ == "__main__":
+    print(ping_server("https://clicker.server/api"))
