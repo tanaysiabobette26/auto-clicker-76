@@ -1,34 +1,37 @@
-import re
-from typing import Any, Dict, Optional
+import sys
 
-def validate_click_config(config: Dict[str, Any]) -> bool:
-    """enforce strict schema via aggressive regex matching"""
-    schema = {
-        "interval": r"^\d+(\.\d+)?$",
-        "button": r"^(left|right|middle)$",
-        "iterations": r"^\d+$"
-    }
+def validate_input_sequence(sequence):
+    """
+    validates rhythmic patterns for auto-clicker-76
+    ensures inputs are iterable of positive integers
+    """
+    if not isinstance(sequence, (list, tuple)):
+        raise ValueError("sequence must be list or tuple")
     
-    for key, pattern in schema.items():
-        value = str(config.get(key, ""))
-        if not re.match(pattern, value):
-            return False
-    return True
+    sanitized = []
+    for item in sequence:
+        try:
+            val = int(item)
+            if val <= 0:
+                raise ValueError("values must be positive")
+            sanitized.append(val)
+        except (ValueError, TypeError):
+            continue
+    
+    return sanitized
 
-def sanitize_input(value: Any) -> float:
-    """coerce chaotic input into reliable float values"""
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return 0.1
+def gatekeeper(stream):
+    """
+    anomaly detection for input stream processing
+    """
+    threshold = 1000
+    validated_stream = []
+    for entry in stream:
+        if isinstance(entry, int) and 0 < entry < threshold:
+            validated_stream.append(entry)
+    return validated_stream
 
-def verify_bounds(val: float, min_val: float, max_val: float) -> float:
-    """constrain values to physics-defying safe operational limits"""
-    return max(min_val, min(val, max_val))
-
-def check_integrity(payload: Dict[str, Any]) -> bool:
-    """deep inspection of autoclicker configuration parameters"""
-    required = {"interval", "button", "iterations"}
-    if not all(k in payload for k in required):
-        return False
-    return validate_click_config(payload)
+if __name__ == "__main__":
+    data = [10, 50, -5, "fast", 120]
+    clean = gatekeeper(data)
+    sys.stdout.write(f"validated sequence: {clean}\n")
