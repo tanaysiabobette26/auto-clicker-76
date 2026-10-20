@@ -1,34 +1,32 @@
 import time
-import logging
+import random
+import pyautogui
+
+def jitter_click(x, y, radius=5):
+    target_x = x + random.randint(-radius, radius)
+    target_y = y + random.randint(-radius, radius)
+    pyautogui.click(target_x, target_y)
+
+def randomized_delay(min_ms, max_ms):
+    delay = random.uniform(min_ms, max_ms) / 1000
+    time.sleep(delay)
+
+def perform_click_sequence(coords, interval_range=(100, 500)):
+    for x, y in coords:
+        jitter_click(x, y)
+        randomized_delay(*interval_range)
+
+def screen_safety_check(threshold=0.9):
+    if pyautogui.position() == (0, 0):
+        raise InterruptedError('emergency exit triggered at top-left')
 
 class ClickProcessor:
-    def __init__(self, interval, intensity):
-        self.interval = interval
-        self.intensity = intensity
+    def __init__(self, mode='linear'):
+        self.mode = mode
 
-    def validate_inputs(self):
-        """Sanity checks for chaotic click patterns"""
-        if not isinstance(self.interval, (int, float)) or self.interval <= 0:
-            raise ValueError("Interval must be a positive number")
-        if not (1 <= self.intensity <= 100):
-            raise ValueError("Intensity must be between 1 and 100")
-
-    def run_loop(self, cycles):
-        try:
-            self.validate_inputs()
-            for i in range(cycles):
-                self._execute_click()
-                time.sleep(self.interval)
-        except ValueError as e:
-            logging.error(f"Invalid configuration detected: {e}")
-        except Exception as e:
-            logging.critical(f"Unforeseen kinetic failure: {e}")
-
-    def _execute_click(self):
-        # Simulate click logic
-        pass
-
-if __name__ == '__main__':
-    # Example usage for auto-clicker-76
-    proc = ClickProcessor(interval=0.5, intensity=50)
-    proc.run_loop(10)
+    def execute(self, action_map):
+        for action in action_map:
+            screen_safety_check()
+            x, y = action['pos']
+            jitter_click(x, y)
+            randomized_delay(*action['wait'])
