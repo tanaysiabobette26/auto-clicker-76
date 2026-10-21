@@ -1,32 +1,55 @@
-import logging
+import os
 import sys
+import logging
+from logging.handlers import RotatingFileHandler
+from typing import Optional
 
-class InputGuardian:
-    def __init__(self):
-        self.logger = logging.getLogger('auto-clicker-76')
-        logging.basicConfig(level=logging.INFO)
+class ClickPulseFormatter(logging.Formatter):
+    """Custom formatter adding dynamic visual indicators for click activities."""
+    PULSES = ["·", "•", "●", "✦", "█"]
 
-    def sanitize(self, raw_input):
-        try:
-            val = float(raw_input)
-            if val < 0.01:
-                self.logger.warning(f'Input {val} too low, clamping to 0.01')
-                return 0.01
-            if val > 60.0:
-                self.logger.warning(f'Input {val} too high, clamping to 60.0')
-                return 60.0
-            return val
-        except (ValueError, TypeError):
-            self.logger.error('Invalid telemetry data received, defaulting to 1.0')
-            return 1.0
+    def format(self, record: logging.LogRecord) -> str:
+        cps = getattr(record, 'cps', 0)
+        idx = min(int(cps / 10), len(self.PULSES) - 1)
+        record.pulse = self.PULSES[idx] if cps > 0 else " "
+        return super().format(record)
 
-def run_validation_loop(stream):
-    guardian = InputGuardian()
-    for entry in stream:
-        clean_val = guardian.sanitize(entry)
-        print(f'Processing validated click interval: {clean_val}s')
-        yield clean_val
+def setup_autoclick_logger(
+    log_file: str = "autoclicker.log",
+    max_bytes: int = 512 * 1024,
+    backup_count: int = 3,
+    level: int = logging.INFO
+) -> logging.Logger:
+    """Configures rotating logger tailored for high-frequency click events."""
+    logger = logging.getLogger("auto_clicker_76")
+    logger.setLevel(level)
 
-if __name__ == '__main__':
-    test_inputs = ['0.5', 'invalid', '100', '0.0001']
-    list(run_validation_loop(test_inputs))
+    if logger.handlers:
+        return logger
+
+    log_dir = os.path.dirname(log_file)
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+
+    fmt = "[%(asctime)s] [%(levelname)s] [%(pulse)s] %(message)s"
+    formatter = ClickPulseFormatter(fmt, datefmt="%Y-%m-%d %H:%M:%S")
+
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=max_bytes,
+        backupCount=backup_count,
+        encoding="utf-8"
+    )
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+
+    return logger
+
+if __name__ == "__main__":
+    log = setup_autoclick_logger("logs/clicker.log")
+    log.info("Autoclicker initialized", extra={"cps": 0})
+    log.info("Click burst active", extra={"cps": 25})
