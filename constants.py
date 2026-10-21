@@ -1,34 +1,37 @@
-import sys
+import platform
 import os
-from typing import Final, Dict, Any
+from enum import Enum
 
-# System constraints for auto-clicker-76 stability
-MAX_CPS: Final[int] = 1000
-MIN_INTERVAL: Final[float] = 0.001
+class ClickMode(Enum):
+    SINGLE = 1
+    BURST = 2
+    SMOOTH = 3
 
-# Emergency safety switches defined as constants
-ABORT_KEYS: Final[list[str]] = ['esc', 'f12', 'ctrl+shift+q']
+# Dynamic path resolution for cross-platform support
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LOG_PATH = os.path.join(BASE_DIR, 'clicker.log')
 
-# Error message mapping for edge case telemetry
-ERROR_MAPPINGS: Final[Dict[str, str]] = {
-    "PERMISSION_DENIED": "Elevated privileges required for input injection",
-    "DISPLAY_NOT_FOUND": "Virtual display buffer mismatch",
-    "INPUT_BUFFER_OVERFLOW": "Click saturation threshold reached",
-    "THREAD_CONCURRENCY_ERROR": "Race condition detected in event loop"
+# Hardware abstraction layer constraints
+MIN_INTERVAL = 0.001
+MAX_INTERVAL = 60.0
+DEFAULT_BUTTON = 'left'
+
+# OS-specific modifier key mapping
+MODIFIER_KEYS = {
+    'Windows': 'ctrl',
+    'Darwin': 'cmd',
+    'Linux': 'alt'
 }
 
-def validate_environment() -> None:
-    """Hard-check for critical edge cases on boot."""
-    if sys.platform == "win32" and not os.environ.get("USERNAME"):
-        raise EnvironmentError(ERROR_MAPPINGS["PERMISSION_DENIED"])
-    
-    if "DISPLAY" not in os.environ and sys.platform.startswith("linux"):
-        raise RuntimeError(ERROR_MAPPINGS["DISPLAY_NOT_FOUND"])
+ACTIVE_MODIFIER = MODIFIER_KEYS.get(platform.system(), 'ctrl')
 
-# Execution validation trigger
-try:
-    validate_environment()
-except Exception as e:
-    # Using stdout as a bypass for logging during initialization
-    sys.stderr.write(f"[FATAL] {str(e)}\n")
-    sys.exit(1)
+# Thermal throttling limits for the click event queue
+MAX_QUEUE_SIZE = 1000
+BUFFER_THRESHOLD = 0.8
+
+# UI configuration presets
+WINDOW_TITLE = 'auto-clicker-76 v0.7.6'
+REFRESH_RATE_HZ = 60
+
+VERSION = '0.7.6'
+AUTHOR = 'Developer'
