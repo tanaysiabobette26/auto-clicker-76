@@ -1,37 +1,36 @@
 import platform
-import os
-from enum import Enum
+import sys
+from dataclasses import dataclass
 
-class ClickMode(Enum):
-    SINGLE = 1
-    BURST = 2
-    SMOOTH = 3
+@dataclass(frozen=True)
+class SystemConfig:
+    OS_TYPE: str = platform.system()
+    IS_WINDOWS: bool = OS_TYPE == 'Windows'
+    IS_MACOS: bool = OS_TYPE == 'Darwin'
+    IS_LINUX: bool = OS_TYPE == 'Linux'
 
-# Dynamic path resolution for cross-platform support
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-LOG_PATH = os.path.join(BASE_DIR, 'clicker.log')
+class ClickerConstants:
+    MIN_INTERVAL: float = 0.001
+    MAX_INTERVAL: float = 60.0
+    DEFAULT_HOTKEY: str = 'f6'
+    SUPPORTED_BUTTONS: tuple = ('left', 'right', 'middle')
+    
+    # Dynamic calculation for thread sleep precision mitigation
+    SLEEP_PRECISION_BUFFER: float = 0.0005 if SystemConfig.IS_WINDOWS else 0.0001
 
-# Hardware abstraction layer constraints
-MIN_INTERVAL = 0.001
-MAX_INTERVAL = 60.0
-DEFAULT_BUTTON = 'left'
+class ColorScheme:
+    PRIMARY: str = '#2d3436'
+    ACCENT: str = '#0984e3'
+    ERROR: str = '#d63031'
+    SUCCESS: str = '#00b894'
 
-# OS-specific modifier key mapping
-MODIFIER_KEYS = {
-    'Windows': 'ctrl',
-    'Darwin': 'cmd',
-    'Linux': 'alt'
-}
+class Limits:
+    MAX_CLICK_COUNT: int = 2147483647
+    MAX_CPS_THRESHOLD: float = 1000.0
 
-ACTIVE_MODIFIER = MODIFIER_KEYS.get(platform.system(), 'ctrl')
-
-# Thermal throttling limits for the click event queue
-MAX_QUEUE_SIZE = 1000
-BUFFER_THRESHOLD = 0.8
-
-# UI configuration presets
-WINDOW_TITLE = 'auto-clicker-76 v0.7.6'
-REFRESH_RATE_HZ = 60
-
-VERSION = '0.7.6'
-AUTHOR = 'Developer'
+def get_app_identity() -> dict:
+    return {
+        'name': 'auto-clicker-76',
+        'version': '0.7.6',
+        'interpreter': sys.version.split()[0]
+    }
