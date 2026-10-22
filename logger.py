@@ -1,63 +1,42 @@
-import logging
-import logging.handlers
-from pathlib import Path
+import datetime
 import sys
+import os
 
-
-class BurstLogFormatter(logging.Formatter):
-    """Custom formatter injecting click burst badges and CPS indicators."""
-
-    BADGES = {
-        logging.DEBUG: "[TRACE]",
-        logging.INFO: "[CLICK]",
-        logging.WARNING: "[BURST]",
-        logging.ERROR: "[ERROR]",
-        logging.CRITICAL: "[HALT]",
+class ClickLogger:
+    """Colorful terminal output wrapper for auto-clicker-76 events."""
+    COLORS = {
+        "INFO": "\033[94m",
+        "WARN": "\033[93m",
+        "FAIL": "\033[91m",
+        "END": "\033[0m"
     }
 
-    def format(self, record: logging.LogRecord) -> str:
-        badge = self.BADGES.get(record.levelno, "[LOG]")
-        cps = getattr(record, "cps", None)
-        record.click_badge = f"{badge} @ {cps:.1f} CPS" if cps is not None else badge
-        return super().format(record)
+    def __init__(self, log_to_file=False):
+        self.log_file = "clicker_session.log" if log_to_file else None
 
+    def _format(self, level, message):
+        ts = datetime.datetime.now().strftime("%H:%M:%S")
+        return f"{self.COLORS.get(level, '')}[{ts}] {level}: {message}{self.COLORS['END']}"
 
-def configure_autoclick_logger(
-    name: str = "auto_clicker",
-    log_dir: str = "logs",
-    max_mb: float = 1.0,
-    backups: int = 5,
-) -> logging.Logger:
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
-    logger.handlers.clear()
+    def log(self, level, msg):
+        formatted = self._format(level, msg)
+        print(formatted)
+        if self.log_file:
+            with open(self.log_file, "a") as f:
+                f.write(f"{formatted}\n")
 
-    folder = Path(log_dir)
-    folder.mkdir(parents=True, exist_ok=True)
+    @staticmethod
+    def spin_banner():
+        """Displays startup branding for auto-clicker-76."""
+        print("\n".join([
+            "  _   _          _ _      _   _             ",
+            " | | | |        | | |    | | | |            ",
+            " | |_| |___  ___| | | ___| |_| |_ ___ _ __  ",
+            " |  _  / _ \/ _ \ | |/ _ \ __| __/ _ \ '__| ",
+            " | | | |  __/ (_) | |  __/ |_| ||  __/ |    ",
+            " \_| |_/\___|\___/|_|\___|\__|\__\___|_|    ",
+            "[Initialized Auto-Clicker-76 Engine]\n"
+        ]))
 
-    log_format = "%(asctime)s | %(click_badge)s | %(message)s"
-    formatter = BurstLogFormatter(fmt=log_format, datefmt="%H:%M:%S")
-
-    file_handler = logging.handlers.RotatingFileHandler(
-        filename=folder / f"{name}.log",
-        maxBytes=int(max_mb * 1024 * 1024),
-        backupCount=backups,
-        encoding="utf-8",
-    )
-    file_handler.setFormatter(formatter)
-    file_handler.setLevel(logging.DEBUG)
-
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
-    console_handler.setLevel(logging.INFO)
-
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-
-    return logger
-
-
-if __name__ == "__main__":
-    app_log = configure_autoclick_logger()
-    app_log.info("Engine armed", extra={"cps": 0.0})
-    app_log.warning("High speed burst initiated", extra={"cps": 60.5})
+def get_logger(to_file=False):
+    return ClickLogger(to_file)
