@@ -1,55 +1,63 @@
-import os
-import sys
 import logging
-from logging.handlers import RotatingFileHandler
-from typing import Optional
+import logging.handlers
+from pathlib import Path
+import sys
 
-class ClickPulseFormatter(logging.Formatter):
-    """Custom formatter adding dynamic visual indicators for click activities."""
-    PULSES = ["·", "•", "●", "✦", "█"]
+
+class BurstLogFormatter(logging.Formatter):
+    """Custom formatter injecting click burst badges and CPS indicators."""
+
+    BADGES = {
+        logging.DEBUG: "[TRACE]",
+        logging.INFO: "[CLICK]",
+        logging.WARNING: "[BURST]",
+        logging.ERROR: "[ERROR]",
+        logging.CRITICAL: "[HALT]",
+    }
 
     def format(self, record: logging.LogRecord) -> str:
-        cps = getattr(record, 'cps', 0)
-        idx = min(int(cps / 10), len(self.PULSES) - 1)
-        record.pulse = self.PULSES[idx] if cps > 0 else " "
+        badge = self.BADGES.get(record.levelno, "[LOG]")
+        cps = getattr(record, "cps", None)
+        record.click_badge = f"{badge} @ {cps:.1f} CPS" if cps is not None else badge
         return super().format(record)
 
-def setup_autoclick_logger(
-    log_file: str = "autoclicker.log",
-    max_bytes: int = 512 * 1024,
-    backup_count: int = 3,
-    level: int = logging.INFO
+
+def configure_autoclick_logger(
+    name: str = "auto_clicker",
+    log_dir: str = "logs",
+    max_mb: float = 1.0,
+    backups: int = 5,
 ) -> logging.Logger:
-    """Configures rotating logger tailored for high-frequency click events."""
-    logger = logging.getLogger("auto_clicker_76")
-    logger.setLevel(level)
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+    logger.handlers.clear()
 
-    if logger.handlers:
-        return logger
+    folder = Path(log_dir)
+    folder.mkdir(parents=True, exist_ok=True)
 
-    log_dir = os.path.dirname(log_file)
-    if log_dir:
-        os.makedirs(log_dir, exist_ok=True)
+    log_format = "%(asctime)s | %(click_badge)s | %(message)s"
+    formatter = BurstLogFormatter(fmt=log_format, datefmt="%H:%M:%S")
 
-    fmt = "[%(asctime)s] [%(levelname)s] [%(pulse)s] %(message)s"
-    formatter = ClickPulseFormatter(fmt, datefmt="%Y-%m-%d %H:%M:%S")
-
-    file_handler = RotatingFileHandler(
-        log_file,
-        maxBytes=max_bytes,
-        backupCount=backup_count,
-        encoding="utf-8"
+    file_handler = logging.handlers.RotatingFileHandler(
+        filename=folder / f"{name}.log",
+        maxBytes=int(max_mb * 1024 * 1024),
+        backupCount=backups,
+        encoding="utf-8",
     )
     file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+    file_handler.setLevel(logging.DEBUG)
 
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(formatter)
+    console_handler.setLevel(logging.INFO)
+
+    logger.addHandler(file_handler)
     logger.addHandler(console_handler)
 
     return logger
 
+
 if __name__ == "__main__":
-    log = setup_autoclick_logger("logs/clicker.log")
-    log.info("Autoclicker initialized", extra={"cps": 0})
-    log.info("Click burst active", extra={"cps": 25})
+    app_log = configure_autoclick_logger()
+    app_log.info("Engine armed", extra={"cps": 0.0})
+    app_log.warning("High speed burst initiated", extra={"cps": 60.5})
