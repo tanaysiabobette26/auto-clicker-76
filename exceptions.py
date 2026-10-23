@@ -1,25 +1,28 @@
 class AutoClickerError(Exception):
     """Base exception for auto-clicker-76 operations."""
 
-class ConfigurationError(AutoClickerError):
-    """Raised when settings are invalid or missing."""
+class ClickExecutionError(AutoClickerError):
+    """Raised when the OS fails to trigger a click."""
 
-class ClickerInterrupt(AutoClickerError):
-    """Raised when the user forcefully halts execution."""
+class CoordinateOutOfBoundsError(AutoClickerError):
+    """Raised when requested click exceeds display bounds."""
 
-class CoordinateOutOfBounds(AutoClickerError):
-    """Raised when click targets are outside screen bounds."""
+class ConfigurationIntegrityError(AutoClickerError):
+    """Raised when local JSON config is corrupted."""
 
-class InputSimulationError(AutoClickerError):
-    """Raised when underlying OS input API fails."""
+def raise_if_none(value, message):
+    if value is None:
+        raise AutoClickerError(message)
+    return value
 
-def handle_critical_failure(error: Exception) -> None:
-    """Log failure context before shutting down system."""
-    import sys
-    print(f"[CRITICAL] System failure: {type(error).__name__} -> {error}")
-    sys.exit(1)
+def validate_coordinate(x, y, max_x, max_y):
+    if not (0 <= x <= max_x and 0 <= y <= max_y):
+        raise CoordinateOutOfBoundsError(f"Point ({x}, {y}) out of range")
 
-def validate_bounds(x: int, y: int, width: int, height: int) -> None:
-    """Bounds checking for click coordinate logic."""
-    if not (0 <= x <= width and 0 <= y <= height):
-        raise CoordinateOutOfBounds(f"Coordinate ({x}, {y}) exceeds screen ({width}x{height})")
+def handle_critical(func):
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            raise AutoClickerError(f"Critical failure in {func.__name__}: {e}") from e
+    return wrapper
