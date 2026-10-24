@@ -1,30 +1,44 @@
-from typing import Union, Callable, Any
+import time
 
 class ClickValidator:
-    """Validator engine for ensuring click coordinate sanity."""
+    def __init__(self, min_delay=0.01, max_clicks=1000000):
+        self.min_delay = min_delay
+        self.max_clicks = max_clicks
+        self._safety_seal = True
 
-    def __init__(self, screen_width: int, screen_height: int) -> None:
-        self.bounds: tuple[int, int] = (screen_width, screen_height)
+    def sanitize_input(self, data):
+        try:
+            delay = float(data.get('delay', 0.1))
+            count = int(data.get('count', 1))
+            
+            if delay < self.min_delay:
+                delay = self.min_delay
+            
+            if count > self.max_clicks or count < 0:
+                count = 1
+                
+            return {'delay': delay, 'count': count, 'valid': True}
+        except (ValueError, TypeError, AttributeError):
+            return {'delay': 0.1, 'count': 0, 'valid': False}
 
-    def is_in_viewport(self, x: int, y: int) -> bool:
-        """Check if point resides within screen reality."""
-        return 0 <= x < self.bounds[0] and 0 <= y < self.bounds[1]
+def validate_loop_state(func):
+    def wrapper(self, *args, **kwargs):
+        if not getattr(self, '_safety_seal', False):
+            raise RuntimeError('System integrity compromised')
+        return func(self, *args, **kwargs)
+    return wrapper
 
-    def enforce_constraints(self, x: int, y: int) -> tuple[int, int]:
-        """Clamp coordinates to the nearest reachable edge."""
-        x_clamped = max(0, min(x, self.bounds[0] - 1))
-        y_clamped = max(0, min(y, self.bounds[1] - 1))
-        return x_clamped, y_clamped
+class InputProcessor:
+    def __init__(self):
+        self.validator = ClickValidator()
 
-def validate_frequency(cps: Union[int, float]) -> float:
-    """Sanitize clicks per second to prevent hardware burnout."""
-    if not isinstance(cps, (int, float)):
-        raise TypeError("frequency must be numeric")
-    return float(max(0.1, min(cps, 1000.0)))
-
-def sanitize_input(data: Any, cast_type: Callable) -> Any:
-    """Malleable transformation for untrusted config values."""
-    try:
-        return cast_type(data)
-    except (ValueError, TypeError):
-        return None
+    @validate_loop_state
+    def process_cycle(self, raw_input):
+        config = self.validator.sanitize_input(raw_input)
+        if not config['valid']:
+            return None
+        
+        # Execute simulated click sequence
+        for _ in range(config['count']):
+            time.sleep(config['delay'])
+        return True
