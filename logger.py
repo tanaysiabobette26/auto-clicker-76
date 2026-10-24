@@ -1,42 +1,43 @@
-import datetime
+import logging
 import sys
-import os
+from typing import Final
 
-class ClickLogger:
-    """Colorful terminal output wrapper for auto-clicker-76 events."""
-    COLORS = {
-        "INFO": "\033[94m",
-        "WARN": "\033[93m",
-        "FAIL": "\033[91m",
-        "END": "\033[0m"
-    }
+LOG_FORMAT: Final[str] = "%(asctime)s | %(levelname)-8s | %(message)s"
 
-    def __init__(self, log_to_file=False):
-        self.log_file = "clicker_session.log" if log_to_file else None
+def setup_logger(name: str = "auto-clicker-76") -> logging.Logger:
+    """
+    Initialize a logger instance with custom formatting for debugging.
+    
+    :param name: Identifier for the logger.
+    :return: Configured logging.Logger object.
+    """
+    logger: logging.Logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
 
-    def _format(self, level, message):
-        ts = datetime.datetime.now().strftime("%H:%M:%S")
-        return f"{self.COLORS.get(level, '')}[{ts}] {level}: {message}{self.COLORS['END']}"
+    if not logger.handlers:
+        stream_handler: logging.StreamHandler = logging.StreamHandler(sys.stdout)
+        formatter: logging.Formatter = logging.Formatter(LOG_FORMAT)
+        
+        stream_handler.setFormatter(formatter)
+        logger.addHandler(stream_handler)
 
-    def log(self, level, msg):
-        formatted = self._format(level, msg)
-        print(formatted)
-        if self.log_file:
-            with open(self.log_file, "a") as f:
-                f.write(f"{formatted}\n")
+    return logger
 
-    @staticmethod
-    def spin_banner():
-        """Displays startup branding for auto-clicker-76."""
-        print("\n".join([
-            "  _   _          _ _      _   _             ",
-            " | | | |        | | |    | | | |            ",
-            " | |_| |___  ___| | | ___| |_| |_ ___ _ __  ",
-            " |  _  / _ \/ _ \ | |/ _ \ __| __/ _ \ '__| ",
-            " | | | |  __/ (_) | |  __/ |_| ||  __/ |    ",
-            " \_| |_/\___|\___/|_|\___|\__|\__\___|_|    ",
-            "[Initialized Auto-Clicker-76 Engine]\n"
-        ]))
+class ClickerLogger:
+    """
+    A wrapper for logging application events during clicking tasks.
+    """
+    def __init__(self, log_name: str = "auto-clicker-76") -> None:
+        self.logger: logging.Logger = setup_logger(log_name)
 
-def get_logger(to_file=False):
-    return ClickLogger(to_file)
+    def info(self, msg: str) -> None:
+        """Log an informational message."""
+        self.logger.info(msg)
+
+    def warn(self, msg: str) -> None:
+        """Log a warning message."""
+        self.logger.warning(msg)
+
+    def error(self, msg: str) -> None:
+        """Log a critical error message."""
+        self.logger.error(msg)
