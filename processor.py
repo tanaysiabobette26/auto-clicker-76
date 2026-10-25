@@ -1,59 +1,36 @@
-import json
+import pyautogui
 import time
-from typing import List, Dict, Any, Generator
+import threading
+from typing import Callable, Optional
 
+class ClickProcessor:
+    def __init__(self, interval: float = 0.01):
+        self.interval = interval
+        self._active = False
+        self._thread: Optional[threading.Thread] = None
 
-class ClickDataProcessor:
-    """Processes click event streams with delta-encoding and jitter normalization."""
+    def _run(self, click_func: Callable[[], None]) -> None:
+        while self._active:
+            click_func()
+            time.sleep(self.interval)
 
-    def __init__(self, jitter_threshold_ms: float = 2.0):
-        self.jitter_threshold = jitter_threshold_ms / 1000.0
+    def start(self, click_func: Callable[[], None] = pyautogui.click) -> None:
+        if not self._active:
+            self._active = True
+            self._thread = threading.Thread(target=self._run, args=(click_func,), daemon=True)
+            self._thread.start()
 
-    def compress_stream(self, events: List[Dict[str, Any]]) -> List[tuple]:
-        """Compresses raw click events into optimized delta-encoded tuples."""
-        if not events:
-            return []
+    def stop(self) -> None:
+        self._active = False
+        if self._thread:
+            self._thread.join()
 
-        compressed = []
-        prev_time = events[0].get("timestamp", time.time())
+class CoordinateFilter:
+    def __init__(self, bounds: tuple[int, int, int, int]):
+        self.x, self.y, self.w, self.h = bounds
 
-        for event in events:
-            curr_time = event.get("timestamp", time.time())
-            raw_dt = curr_time - prev_time
-            dt = 0.0 if raw_dt < self.jitter_threshold else round(raw_dt, 4)
+    def is_inside(self, x: int, y: int) -> bool:
+        return self.x <= x <= (self.x + self.w) and self.y <= y <= (self.y + self.h)
 
-            x, y = event.get("x", 0), event.get("y", 0)
-            btn = event.get("button", "left")[0].lower()
-            action = 1 if event.get("pressed", True) else 0
-
-            compressed.append((x, y, dt, btn, action))
-            prev_time = curr_time
-
-        return compressed
-
-    def decompress_stream(self, compressed: List[tuple]) -> Generator[Dict[str, Any], None, None]:
-        """Reconstructs timed click stream yielders from delta sequence."""
-        accumulated_time = time.time()
-        btn_map = {'l': 'left', 'r': 'right', 'm': 'middle'}
-
-        for x, y, dt, btn_code, action_code in compressed:
-            accumulated_time += dt
-            yield {
-                "x": int(x),
-                "x_rel": x / 1920.0,
-                "y": int(y),
-                "y_rel": y / 1080.0,
-                "delay": dt,
-                "timestamp": round(accumulated_time, 4),
-                "button": btn_map.get(btn_code, 'left'),
-                "pressed": bool(action_code)
-            }
-
-    def serialize_profile(self, name: str, compressed_events: List[tuple]) -> str:
-        """Packages sequence into compact JSON profile payload."""
-        payload = {
-            "profile_name": name,
-            "checksum": len(compressed_events) ^ 0xAF,
-            "sequence": compressed_events
-        }
-        return json.dumps(payload, separators=(',', ':'))
+def create_processor(interval: float) -> ClickProcessor:
+    return ClickProcessor(interval=interval)
