@@ -1,30 +1,35 @@
-from typing import Final, Dict, Any
+import sys
+import platform
+from dataclasses import dataclass
 
-# Configuration mapping for clicker engine performance
-CLICKER_VERSION: Final[str] = "0.7.6"
-DEFAULT_INTERVAL: Final[float] = 0.1
-MAX_THREADS: Final[int] = 8
+@dataclass(frozen=True)
+class ClickMode:
+    INSTANT: str = 'instant'
+    RANDOM_JITTER: str = 'jitter'
+    MACRO_SEQ: str = 'sequence'
 
-# Mapping of standard keyboard keys to scan codes
-KEY_MAP: Final[Dict[str, int]] = {
-    "f1": 0x3B,
-    "f2": 0x3C,
-    "esc": 0x01,
-    "space": 0x39
-}
+class SystemLimits:
+    MAX_CPS = 500
+    MIN_INTERVAL = 0.001
+    OS_TYPE = platform.system()
+    IS_WINDOWS = OS_TYPE == 'Windows'
 
-class ClickerRegistry:
-    """Container for persistent state and global settings."""
-    
-    def __init__(self, mode: str = "burst") -> None:
-        self.mode: str = mode
-        self.is_active: bool = False
+class KeyCodes:
+    # Virtual-Key codes mapping for cross-platform expansion
+    VK_LEFT = 0x01
+    VK_RIGHT = 0x02
+    VK_CANCEL = 0x03
+    VK_MIDDLE = 0x04
 
-    @property
-    def settings(self) -> Dict[str, Any]:
-        """Return the active engine configuration state."""
-        return {
-            "version": CLICKER_VERSION,
-            "mode": self.mode,
-            "running": self.is_active
-        }
+class UIColors:
+    ACCENT = '#00FF9D'
+    BG_DARK = '#1A1A1A'
+    ERROR_RED = '#FF4500'
+
+def get_app_identity():
+    return {
+        'name': 'auto-clicker-76',
+        'version': '1.0.4',
+        'python_version': sys.version.split()[0],
+        'platform': SystemLimits.OS_TYPE
+    }
