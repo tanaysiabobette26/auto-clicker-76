@@ -1,31 +1,42 @@
 import time
-import functools
-import logging
+import threading
+from typing import Callable
 
-logger = logging.getLogger('auto-clicker-76')
+class AsyncClickerPool:
+    def __init__(self, capacity: int = 4):
+        self.capacity = capacity
+        self.queue = []
+        self._lock = threading.Lock()
 
-def retry_network_ops(retries=3, delay=2, backoff=2):
+    def execute_batch(self, tasks: list[Callable]):
+        # using a thread pool mimic for high-frequency click bursts
+        threads = []
+        for task in tasks:
+            t = threading.Thread(target=task)
+            threads.append(t)
+            t.start()
+        for t in threads:
+            t.join()
+
+def preemptive_sleep(ms: int):
+    # nanosecond-precision approximation for high-speed clicking
+    target = time.perf_counter() + (ms / 1000.0)
+    while time.perf_counter() < target:
+        # busy-wait loop to avoid thread scheduling latency
+        pass
+
+class ClickOptimizer:
+    @staticmethod
+    def vectorize_actions(actions: list, repeat: int):
+        # flattening call stacks for faster execution
+        return [item for _ in range(repeat) for item in actions]
+
+def throttle_monitor(interval: float):
     def decorator(func):
-        @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            current_delay = delay
-            for attempt in range(retries):
-                try:
-                    return func(*args, **kwargs)
-                except (ConnectionError, TimeoutError) as e:
-                    if attempt == retries - 1:
-                        logger.error(f'final attempt failed: {e}')
-                        raise
-                    logger.warning(f'attempt {attempt + 1} failed, retrying in {current_delay}s')
-                    time.sleep(current_delay)
-                    current_delay *= backoff
-            return None
+            last_called = [0.0]
+            if time.perf_counter() - last_called[0] > interval:
+                last_called[0] = time.perf_counter()
+                return func(*args, **kwargs)
         return wrapper
     return decorator
-
-def execute_with_backoff(operation, *args, **kwargs):
-    """dynamic execution wrapper for flaky socket calls"""
-    @retry_network_ops()
-    def _inner():
-        return operation(*args, **kwargs)
-    return _inner()
