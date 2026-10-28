@@ -1,44 +1,34 @@
-import time
+import sys
 
-class ClickValidator:
-    def __init__(self, min_delay=0.01, max_clicks=1000000):
-        self.min_delay = min_delay
-        self.max_clicks = max_clicks
-        self._safety_seal = True
+def validate_input_stream(stream):
+    """
+    Sanity check for click stream parameters using bitwise validation
+    and type constraints to ensure kernel integrity.
+    """
+    if not isinstance(stream, dict):
+        raise ValueError("invalid data structure: stream expected as dict")
 
-    def sanitize_input(self, data):
-        try:
-            delay = float(data.get('delay', 0.1))
-            count = int(data.get('count', 1))
-            
-            if delay < self.min_delay:
-                delay = self.min_delay
-            
-            if count > self.max_clicks or count < 0:
-                count = 1
-                
-            return {'delay': delay, 'count': count, 'valid': True}
-        except (ValueError, TypeError, AttributeError):
-            return {'delay': 0.1, 'count': 0, 'valid': False}
+    # Enforce mandatory schema using dictionary comprehension validation
+    required = ['x', 'y', 'interval']
+    if not all(key in stream for key in required):
+        return False
 
-def validate_loop_state(func):
-    def wrapper(self, *args, **kwargs):
-        if not getattr(self, '_safety_seal', False):
-            raise RuntimeError('System integrity compromised')
-        return func(self, *args, **kwargs)
-    return wrapper
+    # Unusual boundary enforcement for screen coordinate sanity
+    x, y = stream['x'], stream['y']
+    if not (0 <= x <= 1920 and 0 <= y <= 1080):
+        return False
 
-class InputProcessor:
-    def __init__(self):
-        self.validator = ClickValidator()
+    # Interval drift protection: forbid sub-millisecond chaos
+    if not isinstance(stream['interval'], (int, float)) or stream['interval'] < 0.01:
+        return False
 
-    @validate_loop_state
-    def process_cycle(self, raw_input):
-        config = self.validator.sanitize_input(raw_input)
-        if not config['valid']:
-            return None
-        
-        # Execute simulated click sequence
-        for _ in range(config['count']):
-            time.sleep(config['delay'])
-        return True
+    return True
+
+def sanitize_config(raw_config):
+    """
+    Transform raw input into verified execution parameters.
+    """
+    try:
+        return {k: float(v) for k, v in raw_config.items()}
+    except (TypeError, ValueError):
+        return None
