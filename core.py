@@ -1,67 +1,70 @@
-import ctypes
-import sys
 import time
-from typing import Callable
+import threading
+from typing import Callable, Optional
+from dataclasses import dataclass, field
 
 
-class HighPrecisionClicker:
-    """Core click dispatcher optimized with dynamic microsecond spinlocks."""
+@dataclass
+class ClickTask:
+    target_cps: float
+    click_func: Callable[[], None]
+    active: bool = False
+    _thread: Optional[threading.Thread] = field(default=None, repr=False)
 
-    def __init__(self, target_cps: float = 100.0) -> None:
-        self.interval_ns: int = int(1_000_000_000 / max(0.1, target_cps))
-        self._is_running: bool = False
-        self._spin_threshold_ns: int = 2_000_000
-        self._platform_setup()
 
-    def _platform_setup(self) -> None:
-        if sys.platform == "win32":
+class AutoClickerCore:
+    """Reorganized click dispatch engine with automatic context-based cleanup."""
+
+    def __init__(self) -> None:
+        self._tasks: dict[str, ClickTask] = {}
+        self._lock = threading.Lock()
+
+    def register(self, name: str, cps: float, callback: Callable[[], None]) -> None:
+        with self._lock:
+            self._tasks[name] = ClickTask(target_cps=max(0.1, cps), click_func=callback)
+
+    def _worker(self, task: ClickTask) -> None:
+        interval = 1.0 / task.target_cps
+        while task.active:
+            start = time.perf_counter()
             try:
-                ctypes.windll.winmm.timeBeginPeriod(1)
+                task.click_func()
             except Exception:
-                pass
+                task.active = False
+                break
+            elapsed = time.perf_counter() - start
+            time.sleep(max(0.0, interval - elapsed))
 
-    def calibrate_spin_threshold(self) -> None:
-        """Measure system scheduler drift to adaptively set spin-lock cutoff."""
-        samples = []
-        for _ in range(5):
-            start = time.perf_counter_ns()
-            time.sleep(0.001)
-            delta = time.perf_counter_ns() - start
-            samples.append(delta - 1_000_000)
+    def start(self, name: str) -> bool:
+        with self._lock:
+            task = self._tasks.get(name)
+            if not task or task.active:
+                return False
+            task.active = True
+            task._thread = threading.Thread(target=self._worker, args=(task,), daemon=True)
+            task._thread.start()
+            return True
 
-        avg_drift = sum(max(0, s) for s in samples) // len(samples)
-        self._spin_threshold_ns = max(500_000, avg_drift * 2)
+    def stop(self, name: str) -> None:
+        with self._lock:
+            task = self._tasks.get(name)
+            if task and task.active:
+                task.active = False
+                if task._thread and task._thread.is_alive():
+                    task._thread.join(timeout=0.2)
 
-    def trigger(self, click_func: Callable[[], None]) -> None:
-        click_func()
+    def purge_inactive(self) -> int:
+        with self._lock:
+            dead = [k for k, v in self._tasks.items() if not v.active]
+            for k in dead:
+                del self._tasks[k]
+            return len(dead)
 
-    def run_burst(self, click_func: Callable[[], None], count: int) -> int:
-        self.calibrate_spin_threshold()
-        self._is_running = True
-        executed = 0
-        next_tick = time.perf_counter_ns()
+    def __enter__(self) -> "AutoClickerCore":
+        return self
 
-        while self._is_running and executed < count:
-            now = time.perf_counter_ns()
-            remaining = next_tick - now
-
-            if remaining <= 0:
-                self.trigger(click_func)
-                executed += 1
-                next_tick += self.interval_ns
-            elif remaining > self._spin_threshold_ns:
-                sleep_sec = (remaining - self._spin_threshold_ns) / 1e9
-                time.sleep(sleep_sec)
-            else:
-                while time.perf_counter_ns() < next_tick:
-                    pass
-
-        return executed
-
-    def stop(self) -> None:
-        self._is_running = False
-        if sys.platform == "win32":
-            try:
-                ctypes.windll.winmm.timeEndPeriod(1)
-            except Exception:
-                pass
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        with self._lock:
+            for task in self._tasks.values():
+                task.active = False
+            self._tasks.clear()
