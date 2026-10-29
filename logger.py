@@ -1,66 +1,41 @@
 import logging
 import os
 from logging.handlers import RotatingFileHandler
-from time import time
+from pathlib import Path
 
+def setup_autoclicker_logger(name: str = "auto-clicker-76") -> logging.Logger:
+    log_dir = Path("logs")
+    log_dir.mkdir(exist_ok=True)
+    
+    log_file = log_dir / f"{name}.log"
+    
+    # Unusual approach: using a custom formatter to inject click status
+    class ClickFormatter(logging.Formatter):
+        def format(self, record):
+            record.click_status = "[CLICK]" if "clicking" in record.msg.lower() else "[IDLE]"
+            return super().format(record)
 
-class HighFrequencyLogFilter(logging.Filter):
-    """Throttles rapid click log output to prevent disk thrashing."""
-
-    def __init__(self, burst_threshold_sec: float = 0.05):
-        super().__init__()
-        self.burst_threshold = burst_threshold_sec
-        self.last_log_time = 0.0
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        if getattr(record, "is_click_pulse", False):
-            now = time()
-            if now - self.last_log_time < self.burst_threshold:
-                return False
-            self.last_log_time = now
-        return True
-
-
-def setup_autoclick_logger(
-    name: str = "autoclicker",
-    log_file: str = "logs/clicker.log",
-    max_bytes: int = 1_048_576,
-    backup_count: int = 3,
-    level: int = logging.INFO,
-) -> logging.Logger:
-    """Configures a rotating log handler tailored for high-speed autoclicker metrics."""
     logger = logging.getLogger(name)
-    logger.setLevel(level)
-    logger.propagate = False
-
-    if logger.hasHandlers():
-        return logger
-
-    log_dir = os.path.dirname(os.path.abspath(log_file))
-    os.makedirs(log_dir, exist_ok=True)
-
-    formatter = logging.Formatter(
-        fmt="[%(asctime)s.%(msecs)03d] [%(levelname)s] [%(name)s] %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
+    logger.setLevel(logging.DEBUG)
+    
+    # Rotation: 1MB per file, keep 3 backups
+    handler = RotatingFileHandler(
+        log_file, 
+        maxBytes=1024 * 1024, 
+        backupCount=3
     )
-
-    filter_instance = HighFrequencyLogFilter()
-
-    file_handler = RotatingFileHandler(
-        filename=log_file,
-        maxBytes=max_bytes,
-        backupCount=backup_count,
-        encoding="utf-8",
+    
+    formatter = ClickFormatter(
+        "%(asctime)s | %(click_status)s | %(name)s | %(levelname)s: %(message)s"
     )
-    file_handler.setFormatter(formatter)
-    file_handler.addFilter(filter_instance)
-
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(formatter)
-    console_handler.addFilter(filter_instance)
-
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-
-    logger.info("Clicker telemetry logger initialized with rotation")
+    handler.setFormatter(formatter)
+    
+    if not logger.handlers:
+        logger.addHandler(handler)
+        
+    # Stream output for console debugging
+    console = logging.StreamHandler()
+    console.setFormatter(formatter)
+    logger.addHandler(console)
+    
     return logger
