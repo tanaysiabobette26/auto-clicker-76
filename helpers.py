@@ -1,42 +1,34 @@
 import time
-import threading
-from typing import Callable
+import functools
+import random
+import logging
 
-class AsyncClickerPool:
-    def __init__(self, capacity: int = 4):
-        self.capacity = capacity
-        self.queue = []
-        self._lock = threading.Lock()
+logger = logging.getLogger(__name__)
 
-    def execute_batch(self, tasks: list[Callable]):
-        # using a thread pool mimic for high-frequency click bursts
-        threads = []
-        for task in tasks:
-            t = threading.Thread(target=task)
-            threads.append(t)
-            t.start()
-        for t in threads:
-            t.join()
-
-def preemptive_sleep(ms: int):
-    # nanosecond-precision approximation for high-speed clicking
-    target = time.perf_counter() + (ms / 1000.0)
-    while time.perf_counter() < target:
-        # busy-wait loop to avoid thread scheduling latency
-        pass
-
-class ClickOptimizer:
-    @staticmethod
-    def vectorize_actions(actions: list, repeat: int):
-        # flattening call stacks for faster execution
-        return [item for _ in range(repeat) for item in actions]
-
-def throttle_monitor(interval: float):
+def retry_network_op(max_attempts=3, backoff_factor=1.5):
     def decorator(func):
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            last_called = [0.0]
-            if time.perf_counter() - last_called[0] > interval:
-                last_called[0] = time.perf_counter()
-                return func(*args, **kwargs)
+            attempts = 0
+            delay = 1.0
+            while attempts < max_attempts:
+                try:
+                    return func(*args, **kwargs)
+                except (ConnectionError, TimeoutError) as e:
+                    attempts += 1
+                    if attempts >= max_attempts:
+                        logger.error(f'operation failed after {max_attempts} attempts: {e}')
+                        raise
+                    sleep_time = delay * (backoff_factor ** (attempts - 1)) + random.uniform(0, 0.5)
+                    logger.warning(f'attempt {attempts} failed, retrying in {sleep_time:.2f}s...')
+                    time.sleep(sleep_time)
+            return None
         return wrapper
     return decorator
+
+@retry_network_op(max_attempts=5)
+def fetch_remote_config(url):
+    # simulates volatile network fetch
+    if random.random() < 0.7:
+        raise ConnectionError('fickle server connection')
+    return {'click_speed': 0.05, 'active': True}
