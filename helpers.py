@@ -1,34 +1,49 @@
-import time
-import functools
+import math
 import random
-import logging
+from typing import Callable, Generator, List, Tuple
 
-logger = logging.getLogger(__name__)
 
-def retry_network_op(max_attempts=3, backoff_factor=1.5):
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            attempts = 0
-            delay = 1.0
-            while attempts < max_attempts:
-                try:
-                    return func(*args, **kwargs)
-                except (ConnectionError, TimeoutError) as e:
-                    attempts += 1
-                    if attempts >= max_attempts:
-                        logger.error(f'operation failed after {max_attempts} attempts: {e}')
-                        raise
-                    sleep_time = delay * (backoff_factor ** (attempts - 1)) + random.uniform(0, 0.5)
-                    logger.warning(f'attempt {attempts} failed, retrying in {sleep_time:.2f}s...')
-                    time.sleep(sleep_time)
-            return None
-        return wrapper
-    return decorator
+class HumanizedInterval:
+    """Dynamic timing jitter engine using bell-curve distribution."""
 
-@retry_network_op(max_attempts=5)
-def fetch_remote_config(url):
-    # simulates volatile network fetch
-    if random.random() < 0.7:
-        raise ConnectionError('fickle server connection')
-    return {'click_speed': 0.05, 'active': True}
+    def __init__(self, base_delay: float, variance: float = 0.15):
+        self.base = max(0.001, base_delay)
+        self.variance = variance
+
+    def __iter__(self) -> Generator[float, None, None]:
+        while True:
+            jitter = random.gauss(0, self.variance * self.base)
+            delay = max(0.001, self.base + jitter)
+            if random.random() < 0.03:
+                delay += random.uniform(0.1, 0.35)
+            yield delay
+
+
+class TargetScatter:
+    """Calculates realistic click dispersion across a target coordinate."""
+
+    @staticmethod
+    def apply_dispersion(
+        point: Tuple[int, int], radius: int = 5
+    ) -> Tuple[int, int]:
+        x, y = point
+        angle = random.uniform(0, 2 * math.pi)
+        r = radius * math.sqrt(random.random())
+        dx = int(round(r * math.cos(angle)))
+        dy = int(round(r * math.sin(angle)))
+        return (x + dx, y + dy)
+
+
+def batch_process(
+    coords: List[Tuple[int, int]], transform: Callable
+) -> Generator[Tuple[int, int], None, None]:
+    """Cleans up and yields transformed point coordinates on demand."""
+    return (transform(pt) for pt in coords if len(pt) == 2)
+
+
+def calculate_cps(click_timestamps: List[float]) -> float:
+    """Calculates current clicks-per-second rate over a sliding window."""
+    if len(click_timestamps) < 2:
+        return 0.0
+    duration = click_timestamps[-1] - click_timestamps[0]
+    return len(click_timestamps) / duration if duration > 0 else 0.0
