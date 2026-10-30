@@ -1,38 +1,45 @@
 import logging
-import sys
-from typing import Final, Optional
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
-class ClickerLogger:
-    """
-    A vibrant logger for auto-clicker-76 events.
-    """
-    FORMAT: Final[str] = "%(asctime)s | %(levelname)s | %(message)s"
+LOG_DIR = Path('logs')
+LOG_FILE = LOG_DIR / 'clicker.log'
+
+class ClickerFormatter(logging.Formatter):
+    _styles = {
+        logging.DEBUG: '🔍',
+        logging.INFO: '⚡',
+        logging.WARNING: '⚠️',
+        logging.ERROR: '💀',
+        logging.CRITICAL: '🔥'
+    }
+
+    def format(self, record):
+        icon = self._styles.get(record.levelno, '🤖')
+        record.msg = f'{icon} {record.msg}'
+        return super().format(record)
+
+def setup_logger():
+    LOG_DIR.mkdir(exist_ok=True)
     
-    def __init__(self, name: str = "auto-clicker") -> None:
-        self._logger: logging.Logger = logging.getLogger(name)
-        self._logger.setLevel(logging.INFO)
-        self._handler: logging.StreamHandler = logging.StreamHandler(sys.stdout)
-        self._handler.setFormatter(logging.Formatter(self.FORMAT))
-        self._logger.addHandler(self._handler)
+    handler = RotatingFileHandler(
+        LOG_FILE,
+        maxBytes=1024 * 512,
+        backupCount=3,
+        encoding='utf-8'
+    )
+    
+    formatter = ClickerFormatter('%(asctime)s | %(levelname)s | %(message)s', datefmt='%H:%M:%S')
+    handler.setFormatter(formatter)
+    
+    logger = logging.getLogger('auto-clicker-76')
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(handler)
+    
+    console = logging.StreamHandler()
+    console.setFormatter(formatter)
+    logger.addHandler(console)
+    
+    return logger
 
-    def info(self, msg: str, data: Optional[dict] = None) -> None:
-        """
-        Logs informational clicks or lifecycle transitions.
-        """
-        full_msg: str = f"{msg} {data if data else ''}"
-        self._logger.info(full_msg)
-
-    def warn(self, reason: str) -> None:
-        """
-        Logs non-fatal hiccups in the click flow.
-        """
-        self._logger.warning(f"Alert: {reason}")
-
-    def error(self, cause: Exception) -> None:
-        """
-        Logs catastrophic failures with stack context.
-        """
-        self._logger.error(f"Crash inbound: {str(cause)}", exc_info=True)
-
-# Global instance for project-wide chatter
-clicker_log: ClickerLogger = ClickerLogger()
+logger = setup_logger()
