@@ -1,41 +1,38 @@
 import logging
-import os
-from logging.handlers import RotatingFileHandler
-from pathlib import Path
+import sys
+from typing import Final, Optional
 
-def setup_autoclicker_logger(name: str = "auto-clicker-76") -> logging.Logger:
-    log_dir = Path("logs")
-    log_dir.mkdir(exist_ok=True)
+class ClickerLogger:
+    """
+    A vibrant logger for auto-clicker-76 events.
+    """
+    FORMAT: Final[str] = "%(asctime)s | %(levelname)s | %(message)s"
     
-    log_file = log_dir / f"{name}.log"
-    
-    # Unusual approach: using a custom formatter to inject click status
-    class ClickFormatter(logging.Formatter):
-        def format(self, record):
-            record.click_status = "[CLICK]" if "clicking" in record.msg.lower() else "[IDLE]"
-            return super().format(record)
+    def __init__(self, name: str = "auto-clicker") -> None:
+        self._logger: logging.Logger = logging.getLogger(name)
+        self._logger.setLevel(logging.INFO)
+        self._handler: logging.StreamHandler = logging.StreamHandler(sys.stdout)
+        self._handler.setFormatter(logging.Formatter(self.FORMAT))
+        self._logger.addHandler(self._handler)
 
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
-    
-    # Rotation: 1MB per file, keep 3 backups
-    handler = RotatingFileHandler(
-        log_file, 
-        maxBytes=1024 * 1024, 
-        backupCount=3
-    )
-    
-    formatter = ClickFormatter(
-        "%(asctime)s | %(click_status)s | %(name)s | %(levelname)s: %(message)s"
-    )
-    handler.setFormatter(formatter)
-    
-    if not logger.handlers:
-        logger.addHandler(handler)
-        
-    # Stream output for console debugging
-    console = logging.StreamHandler()
-    console.setFormatter(formatter)
-    logger.addHandler(console)
-    
-    return logger
+    def info(self, msg: str, data: Optional[dict] = None) -> None:
+        """
+        Logs informational clicks or lifecycle transitions.
+        """
+        full_msg: str = f"{msg} {data if data else ''}"
+        self._logger.info(full_msg)
+
+    def warn(self, reason: str) -> None:
+        """
+        Logs non-fatal hiccups in the click flow.
+        """
+        self._logger.warning(f"Alert: {reason}")
+
+    def error(self, cause: Exception) -> None:
+        """
+        Logs catastrophic failures with stack context.
+        """
+        self._logger.error(f"Crash inbound: {str(cause)}", exc_info=True)
+
+# Global instance for project-wide chatter
+clicker_log: ClickerLogger = ClickerLogger()
