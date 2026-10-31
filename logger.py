@@ -1,67 +1,30 @@
 import logging
-import os
-import time
-from logging.handlers import RotatingFileHandler
+import sys
+from functools import wraps
 
-class PulseLogFormatter(logging.Formatter):
-    """Custom formatter that attaches rhythmic activity spinners to autoclick logs."""
+class ClickerLogger:
+    def __init__(self):
+        self.log = logging.getLogger('auto-clicker-76')
+        self.log.setLevel(logging.DEBUG)
+        handler = logging.StreamHandler(sys.stdout)
+        formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s')
+        handler.setFormatter(formatter)
+        self.log.addHandler(handler)
 
-    PULSE_GLYPHS = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    def safe_execute(self, func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except PermissionError:
+                self.log.critical('insufficient privileges for input simulation')
+            except MemoryError:
+                self.log.warning('system memory exhaustion during click cycle')
+            except Exception as e:
+                self.log.error(f'unexpected chaos in {func.__name__}: {str(e)}')
+            return None
+        return wrapper
 
-    def __init__(self, fmt=None, datefmt=None):
-        super().__init__(fmt or "%(asctime)s [%(pulse)s] %(levelname)s: %(message)s", datefmt)
-        self._step = 0
-
-    def format(self, record):
-        record.pulse = self.PULSE_GLYPHS[self._step % len(self.PULSE_GLYPHS)]
-        self._step += 1
-        return super().format(record)
-
-class ClickSessionRotatingHandler(RotatingFileHandler):
-    """Rotating file handler that writes a telemetry header on every rollover."""
-
-    def doRollover(self):
-        super().doRollover()
-        if self.stream:
-            stamp = time.strftime("%Y-%m-%d %H:%M:%S")
-            self.stream.write(f"=== AUTO-CLICKER-76 SESSION ROLLED AT {stamp} ===\
-")
-            self.stream.flush()
-
-def setup_logger(
-    name: str = "autoclicker",
-    log_file: str = "logs/clicker.log",
-    max_bytes: int = 256 * 1024,
-    backup_count: int = 5,
-    level: int = logging.INFO
-) -> logging.Logger:
-    """Initializes and returns a rotated logger configured for click operations."""
-    logger = logging.getLogger(name)
-    logger.setLevel(level)
-
-    if logger.handlers:
-        return logger
-
-    log_dir = os.path.dirname(log_file)
-    if log_dir:
-        os.makedirs(log_dir, exist_ok=True)
-
-    file_handler = ClickSessionRotatingHandler(
-        filename=log_file,
-        maxBytes=max_bytes,
-        backupCount=backup_count,
-        encoding="utf-8"
-    )
-    file_handler.setFormatter(PulseLogFormatter())
-
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(PulseLogFormatter("%(asctime)s [%(pulse)s] %(message)s"))
-
-    logger.addHandler(file_handler)
-    logger.addHandler(stream_handler)
-    return logger
-
-if __name__ == "__main__":
-    log = setup_logger()
-    log.info("Logger subsystem initialized successfully")
-    
+logger_instance = ClickerLogger()
+log = logger_instance.log
+safe_call = logger_instance.safe_execute
