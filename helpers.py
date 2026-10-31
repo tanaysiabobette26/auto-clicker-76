@@ -1,49 +1,43 @@
-import math
-import random
-from typing import Callable, Generator, List, Tuple
+import time
+import logging
+from typing import Callable, Any, Optional
 
+logger = logging.getLogger('auto-clicker-76')
 
-class HumanizedInterval:
-    """Dynamic timing jitter engine using bell-curve distribution."""
+class ClickerError(Exception):
+    """Base exception for auto-clicker-76 events."""
+    pass
 
-    def __init__(self, base_delay: float, variance: float = 0.15):
-        self.base = max(0.001, base_delay)
-        self.variance = variance
+def safety_wrapper(func: Callable, *args: Any, **kwargs: Any) -> Optional[Any]:
+    """Executes click events with extreme prejudice against runtime chaos."""
+    try:
+        return func(*args, **kwargs)
+    except PermissionError:
+        logger.error("Insufficient OS privileges for click injection")
+        return None
+    except ValueError as e:
+        logger.warning(f"Invalid coordinate geometry: {e}")
+        return None
+    except Exception as e:
+        logger.critical(f"Catastrophic click failure: {type(e).__name__}")
+        return False
 
-    def __iter__(self) -> Generator[float, None, None]:
-        while True:
-            jitter = random.gauss(0, self.variance * self.base)
-            delay = max(0.001, self.base + jitter)
-            if random.random() < 0.03:
-                delay += random.uniform(0.1, 0.35)
-            yield delay
+def validate_interval(interval: float) -> float:
+    """Enforces sanity bounds on click frequency."""
+    if not isinstance(interval, (int, float)):
+        raise ClickerError("Interval must be numeric")
+    if interval < 0.01:
+        logger.warning("High-frequency interval detected, potentially unstable")
+        return 0.01
+    return float(interval)
 
-
-class TargetScatter:
-    """Calculates realistic click dispersion across a target coordinate."""
-
-    @staticmethod
-    def apply_dispersion(
-        point: Tuple[int, int], radius: int = 5
-    ) -> Tuple[int, int]:
-        x, y = point
-        angle = random.uniform(0, 2 * math.pi)
-        r = radius * math.sqrt(random.random())
-        dx = int(round(r * math.cos(angle)))
-        dy = int(round(r * math.sin(angle)))
-        return (x + dx, y + dy)
-
-
-def batch_process(
-    coords: List[Tuple[int, int]], transform: Callable
-) -> Generator[Tuple[int, int], None, None]:
-    """Cleans up and yields transformed point coordinates on demand."""
-    return (transform(pt) for pt in coords if len(pt) == 2)
-
-
-def calculate_cps(click_timestamps: List[float]) -> float:
-    """Calculates current clicks-per-second rate over a sliding window."""
-    if len(click_timestamps) < 2:
-        return 0.0
-    duration = click_timestamps[-1] - click_timestamps[0]
-    return len(click_timestamps) / duration if duration > 0 else 0.0
+def retry_operation(func: Callable, retries: int = 3) -> Any:
+    """Resilience pattern for transient input device hiccups."""
+    for attempt in range(retries):
+        try:
+            return func()
+        except Exception:
+            if attempt == retries - 1:
+                raise
+            time.sleep(0.1 * (2 ** attempt))
+    return None
