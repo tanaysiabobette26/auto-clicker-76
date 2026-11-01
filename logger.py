@@ -1,30 +1,39 @@
 import logging
-import sys
-from functools import wraps
+import os
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
-class ClickerLogger:
-    def __init__(self):
-        self.log = logging.getLogger('auto-clicker-76')
-        self.log.setLevel(logging.DEBUG)
-        handler = logging.StreamHandler(sys.stdout)
-        formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s')
-        handler.setFormatter(formatter)
-        self.log.addHandler(handler)
+def get_auto_clicker_logger(name: str = 'auto-clicker-76') -> logging.Logger:
+    log_directory = Path('logs')
+    log_directory.mkdir(exist_ok=True)
+    log_path = log_directory / f'{name}.log'
 
-    def safe_execute(self, func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            try:
-                return func(*args, **kwargs)
-            except PermissionError:
-                self.log.critical('insufficient privileges for input simulation')
-            except MemoryError:
-                self.log.warning('system memory exhaustion during click cycle')
-            except Exception as e:
-                self.log.error(f'unexpected chaos in {func.__name__}: {str(e)}')
-            return None
-        return wrapper
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
 
-logger_instance = ClickerLogger()
-log = logger_instance.log
-safe_call = logger_instance.safe_execute
+    if not logger.handlers:
+        # Rotating file handler: 5 files, 1MB each
+        file_handler = RotatingFileHandler(
+            log_path,
+            maxBytes=1_048_576,
+            backupCount=5,
+            encoding='utf-8'
+        )
+        
+        # Creative custom formatter for click events
+        log_formatter = logging.Formatter(
+            '%(asctime)s | %(levelname)-8s | [CLICKER-76] %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        
+        file_handler.setFormatter(log_formatter)
+        logger.addHandler(file_handler)
+        
+        # Also output to console for real-time monitoring
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(log_formatter)
+        logger.addHandler(console_handler)
+
+    return logger
+
+logger = get_auto_clicker_logger()
