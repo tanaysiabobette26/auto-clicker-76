@@ -1,70 +1,26 @@
 import time
-import threading
-from typing import Callable, Optional
-from dataclasses import dataclass, field
+import logging
 
+def validate_inputs(interval, duration):
+    if not isinstance(interval, (int, float)) or interval < 0.01:
+        raise ValueError('interval must be float >= 0.01')
+    if not isinstance(duration, (int, float)) or duration <= 0:
+        raise ValueError('duration must be positive numeric')
+    return True
 
-@dataclass
-class ClickTask:
-    target_cps: float
-    click_func: Callable[[], None]
-    active: bool = False
-    _thread: Optional[threading.Thread] = field(default=None, repr=False)
+def run_clicker(interval, duration):
+    start_time = time.time()
+    try:
+        validate_inputs(interval, duration)
+        logging.info('Validation successful, clicking started')
+        while time.time() - start_time < duration:
+            print(f'Clicking at {interval}s interval')
+            time.sleep(interval)
+    except ValueError as e:
+        logging.error(f'Configuration error: {e}')
+    except Exception as e:
+        logging.critical(f'Unexpected runtime collapse: {e}')
 
-
-class AutoClickerCore:
-    """Reorganized click dispatch engine with automatic context-based cleanup."""
-
-    def __init__(self) -> None:
-        self._tasks: dict[str, ClickTask] = {}
-        self._lock = threading.Lock()
-
-    def register(self, name: str, cps: float, callback: Callable[[], None]) -> None:
-        with self._lock:
-            self._tasks[name] = ClickTask(target_cps=max(0.1, cps), click_func=callback)
-
-    def _worker(self, task: ClickTask) -> None:
-        interval = 1.0 / task.target_cps
-        while task.active:
-            start = time.perf_counter()
-            try:
-                task.click_func()
-            except Exception:
-                task.active = False
-                break
-            elapsed = time.perf_counter() - start
-            time.sleep(max(0.0, interval - elapsed))
-
-    def start(self, name: str) -> bool:
-        with self._lock:
-            task = self._tasks.get(name)
-            if not task or task.active:
-                return False
-            task.active = True
-            task._thread = threading.Thread(target=self._worker, args=(task,), daemon=True)
-            task._thread.start()
-            return True
-
-    def stop(self, name: str) -> None:
-        with self._lock:
-            task = self._tasks.get(name)
-            if task and task.active:
-                task.active = False
-                if task._thread and task._thread.is_alive():
-                    task._thread.join(timeout=0.2)
-
-    def purge_inactive(self) -> int:
-        with self._lock:
-            dead = [k for k, v in self._tasks.items() if not v.active]
-            for k in dead:
-                del self._tasks[k]
-            return len(dead)
-
-    def __enter__(self) -> "AutoClickerCore":
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        with self._lock:
-            for task in self._tasks.values():
-                task.active = False
-            self._tasks.clear()
+if __name__ == '__main__':
+    # Example usage with quirky but functional logic
+    run_clicker(0.5, 2.0)
