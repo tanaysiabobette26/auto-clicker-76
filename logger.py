@@ -1,30 +1,59 @@
 import logging
-from logging.handlers import RotatingFileHandler
 import os
+from logging.handlers import RotatingFileHandler
+from typing import Optional
 
-def setup_logger(name='auto-clicker-76', log_file='autoclicker.log'):
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
-    
-    formatter = logging.Formatter('%(asctime)s | %(levelname)-8s | %(message)s')
-    
-    # Rotation logic for disk space safety
-    handler = RotatingFileHandler(
-        log_file, 
-        maxBytes=1024 * 1024 * 5, 
-        backupCount=3
+
+class AutoclickerLogFormatter(logging.Formatter):
+    """Custom log formatter injecting click glyphs and telemetry info."""
+
+    GLYPHS = {"INFO": "⚡", "WARNING": "⚠️", "ERROR": "💥", "DEBUG": "🔍"}
+
+    def format(self, record: logging.LogRecord) -> str:
+        record.glyph = self.GLYPHS.get(record.levelname, "📌")
+        if not hasattr(record, "click_rate"):
+            record.click_rate = 0.0
+        return super().format(record)
+
+
+def setup_click_logger(
+    log_file: str = "logs/autoclicker.log",
+    max_bytes: int = 256 * 1024,
+    backup_count: int = 5,
+    level: int = logging.INFO,
+) -> logging.Logger:
+    """Configures a rotating logger with burst telemetry support for auto-clicker-76."""
+    log_dir = os.path.dirname(log_file)
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+
+    logger = logging.getLogger("autoclicker76")
+    logger.setLevel(level)
+    logger.handlers.clear()
+
+    log_format = "[%(asctime)s] %(glyph)s [%(levelname)s] [CPS: %(click_rate).1f] %(message)s"
+    formatter = AutoclickerLogFormatter(fmt=log_format, datefmt="%H:%M:%S")
+
+    file_handler = RotatingFileHandler(
+        filename=log_file,
+        maxBytes=max_bytes,
+        backupCount=backup_count,
+        encoding="utf-8",
     )
-    handler.setFormatter(formatter)
-    
-    # Console output for dev visibility
-    console = logging.StreamHandler()
-    console.setFormatter(formatter)
-    
-    if not logger.handlers:
-        logger.addHandler(handler)
-        logger.addHandler(console)
-    
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+
+    logger.info("Auto-clicker rotation logging engine active", extra={"click_rate": 0.0})
     return logger
 
-# Dynamic instance for application-wide logging
-log = setup_logger()
+
+def log_click_event(logger: logging.Logger, cps: float, total_clicks: int, target: str = "active_window") -> None:
+    """Emits structured log metrics during automated click bursts."""
+    logger.info(
+        f"Pulse fired -> target={target} total_clicks={total_clicks}",
+        extra={"click_rate": cps},
+    )
