@@ -1,39 +1,30 @@
 import logging
-import os
 from logging.handlers import RotatingFileHandler
-from pathlib import Path
+import os
 
-def get_auto_clicker_logger(name: str = 'auto-clicker-76') -> logging.Logger:
-    log_directory = Path('logs')
-    log_directory.mkdir(exist_ok=True)
-    log_path = log_directory / f'{name}.log'
-
+def setup_logger(name='auto-clicker-76', log_file='autoclicker.log'):
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
-
+    
+    formatter = logging.Formatter('%(asctime)s | %(levelname)-8s | %(message)s')
+    
+    # Rotation logic for disk space safety
+    handler = RotatingFileHandler(
+        log_file, 
+        maxBytes=1024 * 1024 * 5, 
+        backupCount=3
+    )
+    handler.setFormatter(formatter)
+    
+    # Console output for dev visibility
+    console = logging.StreamHandler()
+    console.setFormatter(formatter)
+    
     if not logger.handlers:
-        # Rotating file handler: 5 files, 1MB each
-        file_handler = RotatingFileHandler(
-            log_path,
-            maxBytes=1_048_576,
-            backupCount=5,
-            encoding='utf-8'
-        )
-        
-        # Creative custom formatter for click events
-        log_formatter = logging.Formatter(
-            '%(asctime)s | %(levelname)-8s | [CLICKER-76] %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        )
-        
-        file_handler.setFormatter(log_formatter)
-        logger.addHandler(file_handler)
-        
-        # Also output to console for real-time monitoring
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(log_formatter)
-        logger.addHandler(console_handler)
-
+        logger.addHandler(handler)
+        logger.addHandler(console)
+    
     return logger
 
-logger = get_auto_clicker_logger()
+# Dynamic instance for application-wide logging
+log = setup_logger()
