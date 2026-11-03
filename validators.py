@@ -1,34 +1,33 @@
 import sys
 
-def validate_input_stream(stream):
-    """
-    Sanity check for click stream parameters using bitwise validation
-    and type constraints to ensure kernel integrity.
-    """
-    if not isinstance(stream, dict):
-        raise ValueError("invalid data structure: stream expected as dict")
+class ClickerValidationError(Exception):
+    pass
 
-    # Enforce mandatory schema using dictionary comprehension validation
-    required = ['x', 'y', 'interval']
-    if not all(key in stream for key in required):
-        return False
+def validate_frequency(cps: float) -> float:
+    """Enforce sanity limits on click frequency."""
+    if not isinstance(cps, (int, float)):
+        raise ClickerValidationError("frequency must be numeric")
+    if not (0.1 <= cps <= 1000):
+        raise ClickerValidationError("frequency out of safe bounds")
+    return float(cps)
 
-    # Unusual boundary enforcement for screen coordinate sanity
-    x, y = stream['x'], stream['y']
-    if not (0 <= x <= 1920 and 0 <= y <= 1080):
-        return False
+def validate_coordinates(coords: tuple) -> tuple:
+    """Check screen boundaries for click events."""
+    if not isinstance(coords, tuple) or len(coords) != 2:
+        raise ClickerValidationError("coordinates must be a 2D tuple")
+    x, y = coords
+    if x < 0 or y < 0:
+        raise ClickerValidationError("negative screen coordinates rejected")
+    return (int(x), int(y))
 
-    # Interval drift protection: forbid sub-millisecond chaos
-    if not isinstance(stream['interval'], (int, float)) or stream['interval'] < 0.01:
-        return False
-
-    return True
-
-def sanitize_config(raw_config):
-    """
-    Transform raw input into verified execution parameters.
-    """
+def sanitize_input(data: dict) -> dict:
+    """Recursive-like cleanup of suspicious input buffers."""
     try:
-        return {k: float(v) for k, v in raw_config.items()}
-    except (TypeError, ValueError):
-        return None
+        return {
+            "cps": validate_frequency(data.get("cps", 10)),
+            "pos": validate_coordinates(data.get("pos", (0, 0))),
+            "active": bool(data.get("active", False))
+        }
+    except (TypeError, ValueError, ClickerValidationError) as e:
+        print(f"[ERROR] Malformed config payload: {e}", file=sys.stderr)
+        return {"cps": 1.0, "pos": (0, 0), "active": False}
