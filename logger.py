@@ -1,39 +1,31 @@
 import logging
-from logging.handlers import RotatingFileHandler
 import sys
-import os
+from datetime import datetime
 
-class AutoClickerLogger:
-    _instance = None
+class ClickerFormatter(logging.Formatter):
+    def format(self, record):
+        timestamp = datetime.now().strftime('%H:%M:%S.%f')[:-3]
+        return f'[{timestamp}] [{record.levelname}] >> {record.getMessage()}'
 
-    def __new__(cls, *args, **kwargs):
-        if not cls._instance:
-            cls._instance = super(AutoClickerLogger, cls).__new__(cls)
-        return cls._instance
-
-    def __init__(self, log_file='autoclicker.log'):
-        if hasattr(self, '_initialized'):
-            return
-        self.logger = logging.getLogger('auto-clicker-76')
+class AutoLogger:
+    def __init__(self, name='auto-clicker-76'):
+        self.logger = logging.getLogger(name)
         self.logger.setLevel(logging.DEBUG)
         
-        formatter = logging.Formatter(
-            '%(asctime)s | %(levelname)-8s | %(filename)s:%(lineno)d | %(message)s'
-        )
-
-        file_handler = RotatingFileHandler(
-            log_file, maxBytes=1024 * 1024 * 5, backupCount=3
-        )
-        file_handler.setFormatter(formatter)
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(ClickerFormatter())
         
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setFormatter(formatter)
+        if not self.logger.handlers:
+            self.logger.addHandler(handler)
 
-        self.logger.addHandler(file_handler)
-        self.logger.addHandler(console_handler)
-        self._initialized = True
+    def info(self, msg):
+        self.logger.info(msg)
 
-    def get_logger(self):
-        return self.logger
+    def warn(self, msg):
+        self.logger.warning(f'CAUTION: {msg}')
 
-logger_instance = AutoClickerLogger().get_logger()
+    def error(self, msg):
+        self.logger.error(f'CRITICAL FAILURE: {msg}')
+
+def get_logger(name='auto-clicker-76'):
+    return AutoLogger(name)
