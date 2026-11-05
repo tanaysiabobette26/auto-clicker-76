@@ -1,33 +1,38 @@
-import sys
+import time
+import functools
 
-class ClickerValidationError(Exception):
+class ClickValidator:
+    def __init__(self, limit=1000):
+        self.limit = limit
+        self.history = [0.0] * limit
+        self.idx = 0
+
+    def __call__(self, func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            now = time.perf_counter()
+            self.history[self.idx] = now
+            self.idx = (self.idx + 1) % self.limit
+            
+            if self.idx == 0:
+                delta = now - self.history[self.idx]
+                if delta < 1.0:
+                    return None
+            return func(*args, **kwargs)
+        return wrapper
+
+class RateLimitExceeded(Exception):
     pass
 
-def validate_frequency(cps: float) -> float:
-    """Enforce sanity limits on click frequency."""
-    if not isinstance(cps, (int, float)):
-        raise ClickerValidationError("frequency must be numeric")
-    if not (0.1 <= cps <= 1000):
-        raise ClickerValidationError("frequency out of safe bounds")
-    return float(cps)
-
-def validate_coordinates(coords: tuple) -> tuple:
-    """Check screen boundaries for click events."""
-    if not isinstance(coords, tuple) or len(coords) != 2:
-        raise ClickerValidationError("coordinates must be a 2D tuple")
-    x, y = coords
-    if x < 0 or y < 0:
-        raise ClickerValidationError("negative screen coordinates rejected")
-    return (int(x), int(y))
-
-def sanitize_input(data: dict) -> dict:
-    """Recursive-like cleanup of suspicious input buffers."""
-    try:
-        return {
-            "cps": validate_frequency(data.get("cps", 10)),
-            "pos": validate_coordinates(data.get("pos", (0, 0))),
-            "active": bool(data.get("active", False))
-        }
-    except (TypeError, ValueError, ClickerValidationError) as e:
-        print(f"[ERROR] Malformed config payload: {e}", file=sys.stderr)
-        return {"cps": 1.0, "pos": (0, 0), "active": False}
+def validate_frequency(min_interval=0.001):
+    last_call = [0.0]
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            current_time = time.perf_counter()
+            if current_time - last_call[0] < min_interval:
+                return None
+            last_call[0] = current_time
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
