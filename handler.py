@@ -1,34 +1,65 @@
-import pyautogui
 import time
 import random
-from typing import Tuple
+from typing import Callable, Generator, List, Tuple, Optional, TypeVar
 
-def jitter_coordinates(pos: Tuple[int, int], radius: int = 3) -> Tuple[int, int]:
-    return (pos[0] + random.randint(-radius, radius), pos[1] + random.randint(-radius, radius))
+T = TypeVar("T")
+ClickResult = Tuple[int, float, bool]
+ActionCallback = Callable[[ClickResult], None]
 
-def human_click(target: Tuple[int, int], hold_time: float = 0.05) -> None:
-    actual_pos = jitter_coordinates(target)
-    pyautogui.moveTo(*actual_pos, duration=random.uniform(0.1, 0.3))
-    pyautogui.mouseDown()
-    time.sleep(hold_time)
-    pyautogui.mouseUp()
+class ClickHandler:
+    """Dynamic event handler for managing high-frequency click bursts with rhythmic jitter."""
 
-def rapid_burst(target: Tuple[int, int], count: int, interval: float) -> None:
-    for _ in range(count):
-        pyautogui.click(*jitter_coordinates(target))
-        time.sleep(interval * random.uniform(0.8, 1.2))
+    def __init__(
+        self,
+        base_interval_ms: float = 50.0,
+        jitter_range: Tuple[float, float] = (-5.0, 15.0),
+        listeners: Optional[List[ActionCallback]] = None
+    ) -> None:
+        """Initialize the handler with interval tuning and optional event callbacks."""
+        self.base_interval_ms = base_interval_ms
+        self.jitter_range = jitter_range
+        self.listeners: List[ActionCallback] = listeners or []
+        self._sequence_counter: int = 0
 
-def safe_zone_check(x: int, y: int, bounds: Tuple[int, int, int, int]) -> bool:
-    x1, y1, x2, y2 = bounds
-    return x1 <= x <= x2 and y1 <= y <= y2
+    def register_listener(self, callback: ActionCallback) -> None:
+        """Attach a subscriber callback to receive click dispatch telemetry."""
+        if callback not in self.listeners:
+            self.listeners.append(callback)
 
-def sleep_with_variance(base_seconds: float, variance: float = 0.1) -> None:
-    time.sleep(base_seconds * (1 + random.uniform(-variance, variance)))
+    def _jitter_generator(self) -> Generator[float, None, None]:
+        """Yield continuous variance offsets calculated via non-linear distribution."""
+        while True:
+            low, high = self.jitter_range
+            multiplier = 1.2 if self._sequence_counter % 2 == 0 else 0.8
+            yield random.uniform(low, high) * multiplier
 
-class ClickExecutor:
-    def __init__(self, fallback_pos: Tuple[int, int] = (0, 0)):
-        self.fallback = fallback_pos
+    def generate_burst(self, total_clicks: int) -> Generator[ClickResult, None, None]:
+        """Execute a controlled burst sequence yielding dispatch metrics per click event.
+        
+        Args:
+            total_clicks: Total number of simulated click iterations to produce.
 
-    def execute(self, pos: Tuple[int, int] = None) -> None:
-        target = pos or self.fallback
-        human_click(target)
+        Yields:
+            ClickResult tuples containing click index, epoch timestamp, and execution flag.
+        """
+        jitter_stream = self._jitter_generator()
+
+        for _ in range(total_clicks):
+            self._sequence_counter += 1
+            delay_delta = next(jitter_stream)
+            effective_delay = max(1.0, self.base_interval_ms + delay_delta) / 1000.0
+
+            time.sleep(effective_delay)
+            event: ClickResult = (self._sequence_counter, time.time(), True)
+
+            for listener in self.listeners:
+                listener(event)
+
+            yield event
+
+    def dispatch_matrix(self, click_plan: List[int]) -> List[ClickResult]:
+        """Process a batch matrix of burst counts sequentially into a flat telemetry log."""
+        log: List[ClickResult] = []
+        for burst_size in click_plan:
+            log.extend(list(self.generate_burst(burst_size)))
+        return log
