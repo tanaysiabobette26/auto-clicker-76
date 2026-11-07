@@ -1,36 +1,33 @@
 import time
-import pyautogui
-from dataclasses import dataclass
+import random
+from functools import wraps
 
-@dataclass
-class ClickerConfig:
-    interval: float = 0.1
-    button: str = 'left'
+def resilient_network_op(max_attempts=3, base_delay=1):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            attempts = 0
+            while attempts < max_attempts:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    attempts += 1
+                    if attempts >= max_attempts:
+                        raise e
+                    jitter = random.uniform(0, 0.5)
+                    sleep_time = (base_delay * (2 ** (attempts - 1))) + jitter
+                    time.sleep(sleep_time)
+            return None
+        return wrapper
+    return decorator
 
-class AutoClicker:
-    def __init__(self, config: ClickerConfig):
-        self.config = config
-        self._running = False
-
-    def run(self):
-        self._running = True
-        try:
-            while self._running:
-                pyautogui.click(button=self.config.button)
-                time.sleep(self.config.interval)
-        except KeyboardInterrupt:
-            self.stop()
-
-    def stop(self):
-        self._running = False
-
-class Orchestrator:
+class ClickCoordinator:
     def __init__(self):
-        self.engine = AutoClicker(ClickerConfig())
+        self.nodes = ['node-alpha', 'node-beta']
 
-    def execute_session(self):
-        print('Initialization of clicker sequence')
-        self.engine.run()
-
-if __name__ == '__main__':
-    Orchestrator().execute_session()
+    @resilient_network_op(max_attempts=4)
+    def sync_click_data(self):
+        # Simulated unstable network call
+        if random.random() < 0.7:
+            raise ConnectionError("Sync packet dropped")
+        return True
