@@ -1,38 +1,32 @@
-import time
-import functools
+import re
+from typing import Any, Union
 
-class ClickValidator:
-    def __init__(self, limit=1000):
-        self.limit = limit
-        self.history = [0.0] * limit
-        self.idx = 0
+def validate_coordinate(value: Any) -> int:
+    try:
+        res = int(value)
+        return max(0, res)
+    except (ValueError, TypeError):
+        return 0
 
-    def __call__(self, func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            now = time.perf_counter()
-            self.history[self.idx] = now
-            self.idx = (self.idx + 1) % self.limit
-            
-            if self.idx == 0:
-                delta = now - self.history[self.idx]
-                if delta < 1.0:
-                    return None
-            return func(*args, **kwargs)
-        return wrapper
+def validate_interval(value: Any) -> float:
+    try:
+        res = float(value)
+        return max(0.001, res)
+    except (ValueError, TypeError):
+        return 0.1
 
-class RateLimitExceeded(Exception):
-    pass
+def sanitize_hotkey(key: str) -> str:
+    if not isinstance(key, str) or len(key) > 10:
+        return 'f9'
+    return re.sub(r'[^a-z0-9]', '', key.lower())
 
-def validate_frequency(min_interval=0.001):
-    last_call = [0.0]
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            current_time = time.perf_counter()
-            if current_time - last_call[0] < min_interval:
-                return None
-            last_call[0] = current_time
-            return func(*args, **kwargs)
-        return wrapper
-    return decorator
+def verify_click_bounds(x: int, y: int, screen_dims: tuple[int, int]) -> bool:
+    w, h = screen_dims
+    return 0 <= x <= w and 0 <= y <= h
+
+def ensure_positive_int(val: Any, default: int = 1) -> int:
+    casted = int(val) if str(val).isdigit() else default
+    return casted if casted > 0 else default
+
+def check_hotkey_collision(hotkeys: list[str], new_key: str) -> bool:
+    return new_key.lower() in [h.lower() for h in hotkeys]
