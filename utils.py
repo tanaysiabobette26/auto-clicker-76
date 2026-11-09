@@ -1,32 +1,32 @@
 import time
-import functools
-import random
-import logging
+import collections
+from functools import lru_cache
 
-logger = logging.getLogger('auto-clicker-76')
+class ClickOptimizer:
+    def __init__(self, interval_ms=10):
+        self.interval = interval_ms / 1000.0
+        self.history = collections.deque(maxlen=100)
 
-def persistent_request(retries=3, backoff=0.5):
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            attempts = 0
-            while attempts < retries:
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    attempts += 1
-                    if attempts >= retries:
-                        logger.error(f'operation failed after {retries} attempts: {e}')
-                        raise
-                    wait = backoff * (2 ** (attempts - 1)) + random.uniform(0, 0.1)
-                    logger.warning(f'attempt {attempts} failed, retrying in {wait:.2f}s...')
-                    time.sleep(wait)
-        return wrapper
-    return decorator
+    @lru_cache(maxsize=128)
+    def calculate_jitter(self, base_ms: int) -> float:
+        import random
+        return base_ms * (1 + (random.random() * 0.05))
 
-@persistent_request(retries=5)
-def fetch_remote_config(url):
-    # Simulate network instability for auto-clicker updates
-    if random.random() < 0.7:
-        raise ConnectionError('server unresponsive')
-    return {'click_speed': 100, 'enabled': True}
+    def get_optimized_delay(self, current_latency: float) -> float:
+        self.history.append(current_latency)
+        avg_latency = sum(self.history) / len(self.history)
+        return max(0.001, self.interval - avg_latency)
+
+def busy_wait(duration: float):
+    start = time.perf_counter()
+    while time.perf_counter() - start < duration:
+        pass
+
+def execute_optimized_click(optimizer: ClickOptimizer, latency: float):
+    delay = optimizer.get_optimized_delay(latency)
+    if delay > 0.005:
+        time.sleep(delay - 0.002)
+    busy_wait(0.002)
+
+def get_precise_timestamp() -> int:
+    return int(time.perf_counter() * 1000000)
