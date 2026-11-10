@@ -1,41 +1,58 @@
-import json
-import os
-from typing import Dict, Any, Union
+import functools
+import random
+import time
+from typing import Any, Callable, Tuple, Type
 
-class ClickConfigHandler:
-    def __init__(self, filepath: str = 'clicks.json'):
-        self.path = filepath
-        self._ensure_file()
 
-    def _ensure_file(self) -> None:
-        if not os.path.exists(self.path):
-            with open(self.path, 'w') as f:
-                json.dump({'profiles': {}, 'active_profile': 'default'}, f)
+class NetworkPulseError(Exception):
+    """Raised when all network pulse retries are exhausted."""
+    pass
 
-    def save_profile(self, name: str, data: Dict[str, Any]) -> None:
-        config = self.load_all()
-        config['profiles'][name] = data
-        with open(self.path, 'w') as f:
-            json.dump(config, f, indent=4)
 
-    def load_all(self) -> Dict[str, Any]:
-        with open(self.path, 'r') as f:
-            return json.load(f)
+def retry_network_pulse(
+    max_pulses: int = 4,
+    base_delay: float = 0.5,
+    backoff_factor: float = 2.0,
+    jitter_range: Tuple[float, float] = (0.08, 0.32),
+    catch_exceptions: Tuple[Type[BaseException], ...] = (Exception,),
+) -> Callable:
+    """Decorator executing network calls with dynamic click-jittered backoff."""
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            pulse_delay = base_delay
+            last_err: Exception | None = None
 
-    def get_setting(self, key: str, default: Any = None) -> Any:
-        config = self.load_all()
-        active = config.get('active_profile', 'default')
-        return config.get('profiles', {}).get(active, {}).get(key, default)
+            for attempt in range(1, max_pulses + 1):
+                try:
+                    return func(*args, **kwargs)
+                except catch_exceptions as err:
+                    last_err = err
+                    if attempt == max_pulses:
+                        break
+                    
+                    human_jitter = random.uniform(*jitter_range)
+                    sleep_duration = pulse_delay + human_jitter
+                    time.sleep(sleep_duration)
+                    pulse_delay *= backoff_factor
 
-def serialize_macro(coords: list[tuple[int, int]], delay: float) -> str:
-    return json.dumps({
-        'sequence': [{'x': x, 'y': y} for x, y in coords],
-        'interval': delay,
-        'meta': 'auto-clicker-76-v1'
-    })
+            raise NetworkPulseError(
+                f"Target signal lost after {max_pulses} pulses. Cause: {last_err}"
+            ) from last_err
 
-def deserialize_macro(data: str) -> Dict[str, Any]:
+        return wrapper
+    return decorator
+
+
+def pulse_fetch_with_fallback(
+    primary_net_op: Callable[..., Any],
+    offline_fallback: Callable[..., Any],
+    *args: Any,
+    **kwargs: Any
+) -> Any:
+    """Executes primary network operation with retry logic, dropping to offline backup on failure."""
+    guarded_op = retry_network_pulse()(primary_net_op)
     try:
-        return json.loads(data)
-    except json.JSONDecodeError:
-        return {'sequence': [], 'interval': 0.0, 'meta': 'corrupted'}
+        return guarded_op(*args, **kwargs)
+    except NetworkPulseError:
+        return offline_fallback(*args, **kwargs)
