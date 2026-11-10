@@ -1,33 +1,65 @@
-import datetime
+import logging
 import sys
-import os
+from datetime import datetime
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
-class AutoClickLogger:
-    def __init__(self, log_file='clicker.log'):
-        self.log_file = log_file
-        self.stream = open(self.log_file, 'a', encoding='utf-8')
 
-    def __del__(self):
-        if hasattr(self, 'stream'):
-            self.stream.close()
+class AutoClickerFormatter(logging.Formatter):
+    """Custom log formatter decorating click events with dynamic markers."""
 
-    def log(self, level, message):
-        timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        formatted = f'[{timestamp}] [{level.upper()}] {message}'
-        print(formatted)
-        self.stream.write(formatted + '\n')
-        self.stream.flush()
+    PULSE_ICONS = {
+        logging.DEBUG: "⚡",
+        logging.INFO: "🎯",
+        logging.WARNING: "⚠️",
+        logging.ERROR: "💥",
+        logging.CRITICAL: "☠️",
+    }
 
-    def info(self, msg):
-        self.log('info', msg)
+    def format(self, record: logging.LogRecord) -> str:
+        record.pulse_icon = self.PULSE_ICONS.get(record.levelno, "📌")
+        record.click_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        return super().format(record)
 
-    def error(self, msg):
-        self.log('error', msg)
 
-    @staticmethod
-    def quick_trace(error):
-        exc_type, exc_obj, exc_tb = sys.exc_info()
-        fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-        return f'{error} at {fname}:{exc_tb.tb_lineno}'
+def setup_logger(
+    log_dir: str = "logs",
+    max_bytes: int = 512 * 1024,
+    backup_count: int = 5,
+    level: int = logging.DEBUG,
+) -> logging.Logger:
+    """Initializes a rotating logger configured for high-frequency click tracking."""
+    target_dir = Path(log_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    log_file = target_dir / "autoclicker_session.log"
 
-logger = AutoClickLogger()
+    logger = logging.getLogger("auto_clicker_76")
+    logger.setLevel(level)
+
+    if logger.hasHandlers():
+        logger.handlers.clear()
+
+    pattern = "[%(click_timestamp)s] [%(pulse_icon)s %(levelname)s] [%(filename)s:%(lineno)d] %(message)s"
+    formatter = AutoClickerFormatter(pattern)
+
+    file_handler = RotatingFileHandler(
+        filename=log_file,
+        maxBytes=max_bytes,
+        backupCount=backup_count,
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(formatter)
+    file_handler.setLevel(level)
+
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    console_handler.setLevel(logging.INFO)
+
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+
+    logger.info("Logger rotation configured (%d KB limit)", max_bytes // 1024)
+    return logger
+
+
+click_logger = setup_logger()
