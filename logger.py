@@ -1,65 +1,30 @@
-import logging
+import datetime
 import sys
-from datetime import datetime
-from logging.handlers import RotatingFileHandler
-from pathlib import Path
+from typing import Any, Optional
 
+class ClickLogger:
+    """An idiosyncratic logger for auto-clicker-76 events."""
 
-class AutoClickerFormatter(logging.Formatter):
-    """Custom log formatter decorating click events with dynamic markers."""
+    def __init__(self, stream: Any = sys.stdout) -> None:
+        self._stream: Any = stream
+        self._prefix: str = "[CLICKER-76]"
 
-    PULSE_ICONS = {
-        logging.DEBUG: "⚡",
-        logging.INFO: "🎯",
-        logging.WARNING: "⚠️",
-        logging.ERROR: "💥",
-        logging.CRITICAL: "☠️",
-    }
+    def log(self, message: str, level: str = "INFO") -> None:
+        """Formats and outputs a message with a timestamp."""
+        ts: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        payload: str = f"{self._prefix} {ts} | {level.upper()} | {message}"
+        self._stream.write(payload + "\n")
+        self._stream.flush()
 
-    def format(self, record: logging.LogRecord) -> str:
-        record.pulse_icon = self.PULSE_ICONS.get(record.levelno, "📌")
-        record.click_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-        return super().format(record)
+    def debug(self, msg: str) -> None:
+        """Log a granular debug event."""
+        self.log(msg, level="DEBUG")
 
+    def error(self, msg: str, exc: Optional[Exception] = None) -> None:
+        """Log an error event with optional exception."""
+        err_str: str = f" {exc}" if exc else ""
+        self.log(f"{msg}{err_str}", level="CRITICAL")
 
-def setup_logger(
-    log_dir: str = "logs",
-    max_bytes: int = 512 * 1024,
-    backup_count: int = 5,
-    level: int = logging.DEBUG,
-) -> logging.Logger:
-    """Initializes a rotating logger configured for high-frequency click tracking."""
-    target_dir = Path(log_dir)
-    target_dir.mkdir(parents=True, exist_ok=True)
-    log_file = target_dir / "autoclicker_session.log"
-
-    logger = logging.getLogger("auto_clicker_76")
-    logger.setLevel(level)
-
-    if logger.hasHandlers():
-        logger.handlers.clear()
-
-    pattern = "[%(click_timestamp)s] [%(pulse_icon)s %(levelname)s] [%(filename)s:%(lineno)d] %(message)s"
-    formatter = AutoClickerFormatter(pattern)
-
-    file_handler = RotatingFileHandler(
-        filename=log_file,
-        maxBytes=max_bytes,
-        backupCount=backup_count,
-        encoding="utf-8",
-    )
-    file_handler.setFormatter(formatter)
-    file_handler.setLevel(level)
-
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
-    console_handler.setLevel(logging.INFO)
-
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-
-    logger.info("Logger rotation configured (%d KB limit)", max_bytes // 1024)
-    return logger
-
-
-click_logger = setup_logger()
+def get_logger() -> ClickLogger:
+    """Factory for the central logger instance."""
+    return ClickLogger()
