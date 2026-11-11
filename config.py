@@ -1,40 +1,39 @@
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict
 
-DEFAULT_SETTINGS = {
-    "interval_ms": 10,
+DEFAULT_CONFIG = {
+    "cps": 10,
     "button": "left",
-    "hold_mode": False,
-    "hotkey": "f6"
+    "toggle_key": "f6",
+    "anti_detect": True
 }
 
-class ConfigLoader:
-    def __init__(self, path: str = "config.json"):
+class ConfigManager:
+    def __init__(self, path="config.json"):
         self.path = Path(path)
-        self.data: Dict[str, Any] = DEFAULT_SETTINGS.copy()
-        self._load_and_merge()
+        self.settings = self._load()
 
-    def _load_and_merge(self) -> None:
+    def _load(self):
         if not self.path.exists():
-            self._save_defaults()
-            return
+            return self._save_defaults()
         try:
             with open(self.path, "r") as f:
-                user_data = json.load(f)
-                self.data.update({k: v for k, v in user_data.items() if k in self.data})
+                return {**DEFAULT_CONFIG, **json.load(f)}
         except (json.JSONDecodeError, IOError):
-            pass
+            return self._save_defaults()
 
-    def _save_defaults(self) -> None:
-        try:
-            with open(self.path, "w") as f:
-                json.dump(self.data, f, indent=4)
-        except IOError:
-            pass
+    def _save_defaults(self):
+        with open(self.path, "w") as f:
+            json.dump(DEFAULT_CONFIG, f, indent=4)
+        return DEFAULT_CONFIG
 
-    def get(self, key: str) -> Any:
-        return self.data.get(key, DEFAULT_SETTINGS.get(key))
+    def get(self, key):
+        return self.settings.get(key, DEFAULT_CONFIG.get(key))
 
-config = ConfigLoader()
+    def set(self, key, value):
+        self.settings[key] = value
+        with open(self.path, "w") as f:
+            json.dump(self.settings, f, indent=4)
+
+config = ConfigManager()
