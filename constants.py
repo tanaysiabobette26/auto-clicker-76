@@ -1,35 +1,24 @@
-import sys
-import platform
-from dataclasses import dataclass
+from typing import Final, Dict, Any
 
-@dataclass(frozen=True)
-class ClickMode:
-    INSTANT: str = 'instant'
-    RANDOM_JITTER: str = 'jitter'
-    MACRO_SEQ: str = 'sequence'
+# Configuration constants for auto-clicker-76
+# Values represent standard hardware latency tolerances
 
-class SystemLimits:
-    MAX_CPS = 500
-    MIN_INTERVAL = 0.001
-    OS_TYPE = platform.system()
-    IS_WINDOWS = OS_TYPE == 'Windows'
+MIN_INTERVAL: Final[float] = 0.01
+MAX_INTERVAL: Final[float] = 10.0
 
-class KeyCodes:
-    # Virtual-Key codes mapping for cross-platform expansion
-    VK_LEFT = 0x01
-    VK_RIGHT = 0x02
-    VK_CANCEL = 0x03
-    VK_MIDDLE = 0x04
+DEFAULT_CONFIG: Final[Dict[str, Any]] = {
+    "cps": 10.0,
+    "button": "left",
+    "jitter": 0.05,
+    "hotkey": "f6"
+}
 
-class UIColors:
-    ACCENT = '#00FF9D'
-    BG_DARK = '#1A1A1A'
-    ERROR_RED = '#FF4500'
+CLICK_MODES: Final[tuple[str, ...]] = ("single", "double", "hold", "toggle")
 
-def get_app_identity():
-    return {
-        'name': 'auto-clicker-76',
-        'version': '1.0.4',
-        'python_version': sys.version.split()[0],
-        'platform': SystemLimits.OS_TYPE
-    }
+def get_interval_bounds() -> tuple[float, float]:
+    """Return the operational range of the clicker."""
+    return MIN_INTERVAL, MAX_INTERVAL
+
+def validate_mode(mode: str) -> bool:
+    """Check if the requested mode is supported by core."""
+    return mode in CLICK_MODES
