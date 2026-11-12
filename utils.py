@@ -1,32 +1,35 @@
 import time
-import collections
-from functools import lru_cache
+import functools
+import logging
 
-class ClickOptimizer:
-    def __init__(self, interval_ms=10):
-        self.interval = interval_ms / 1000.0
-        self.history = collections.deque(maxlen=100)
+logger = logging.getLogger(__name__)
 
-    @lru_cache(maxsize=128)
-    def calculate_jitter(self, base_ms: int) -> float:
-        import random
-        return base_ms * (1 + (random.random() * 0.05))
+def retry_network_operation(max_attempts=3, backoff_factor=1.5):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            attempts = 0
+            delay = 1
+            while attempts < max_attempts:
+                try:
+                    return func(*args, **kwargs)
+                except (ConnectionError, TimeoutError) as e:
+                    attempts += 1
+                    if attempts == max_attempts:
+                        logger.error(f"Operation {func.__name__} failed after {attempts} attempts")
+                        raise
+                    time.sleep(delay)
+                    delay *= backoff_factor
+            return None
+        return wrapper
+    return decorator
 
-    def get_optimized_delay(self, current_latency: float) -> float:
-        self.history.append(current_latency)
-        avg_latency = sum(self.history) / len(self.history)
-        return max(0.001, self.interval - avg_latency)
-
-def busy_wait(duration: float):
-    start = time.perf_counter()
-    while time.perf_counter() - start < duration:
-        pass
-
-def execute_optimized_click(optimizer: ClickOptimizer, latency: float):
-    delay = optimizer.get_optimized_delay(latency)
-    if delay > 0.005:
-        time.sleep(delay - 0.002)
-    busy_wait(0.002)
-
-def get_precise_timestamp() -> int:
-    return int(time.perf_counter() * 1000000)
+def pulse_connection(check_func):
+    """Unconventional ping-pong check wrapper"""
+    def heartbeat(*args, **kwargs):
+        success = check_func(*args, **kwargs)
+        if not success:
+            logger.warning("Pulse signal lost, re-initiating socket handshake")
+            return False
+        return True
+    return heartbeat
