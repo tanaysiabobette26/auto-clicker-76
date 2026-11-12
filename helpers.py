@@ -1,58 +1,43 @@
+import sys
 import functools
-import random
-import time
-from typing import Any, Callable, Tuple, Type
+import logging
 
+logger = logging.getLogger('auto-clicker-76')
 
-class NetworkPulseError(Exception):
-    """Raised when all network pulse retries are exhausted."""
+class ClickerError(Exception):
     pass
 
+def safety_net(func):
+    """Decorator that wraps clicks in a void of silence."""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except (ValueError, TypeError, ZeroDivisionError) as e:
+            logger.error(f"Chaos averted in {func.__name__}: {e}")
+            return None
+        except Exception as e:
+            logger.critical(f"Catastrophic failure in {func.__name__}: {e}")
+            sys.exit(1)
+    return wrapper
 
-def retry_network_pulse(
-    max_pulses: int = 4,
-    base_delay: float = 0.5,
-    backoff_factor: float = 2.0,
-    jitter_range: Tuple[float, float] = (0.08, 0.32),
-    catch_exceptions: Tuple[Type[BaseException], ...] = (Exception,),
-) -> Callable:
-    """Decorator executing network calls with dynamic click-jittered backoff."""
-    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-        @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            pulse_delay = base_delay
-            last_err: Exception | None = None
+@safety_net
+def sanitize_coords(x, y):
+    """Ensures mouse coordinates reside within reality."""
+    if not (isinstance(x, (int, float)) and isinstance(y, (int, float))):
+        raise ValueError("Coordinates must be numeric")
+    
+    safe_x = max(0, int(x))
+    safe_y = max(0, int(y))
+    
+    return (safe_x, safe_y)
 
-            for attempt in range(1, max_pulses + 1):
-                try:
-                    return func(*args, **kwargs)
-                except catch_exceptions as err:
-                    last_err = err
-                    if attempt == max_pulses:
-                        break
-                    
-                    human_jitter = random.uniform(*jitter_range)
-                    sleep_duration = pulse_delay + human_jitter
-                    time.sleep(sleep_duration)
-                    pulse_delay *= backoff_factor
-
-            raise NetworkPulseError(
-                f"Target signal lost after {max_pulses} pulses. Cause: {last_err}"
-            ) from last_err
-
-        return wrapper
-    return decorator
-
-
-def pulse_fetch_with_fallback(
-    primary_net_op: Callable[..., Any],
-    offline_fallback: Callable[..., Any],
-    *args: Any,
-    **kwargs: Any
-) -> Any:
-    """Executes primary network operation with retry logic, dropping to offline backup on failure."""
-    guarded_op = retry_network_pulse()(primary_net_op)
+def validate_interval(value):
+    """Prevents hyper-speed loops from crashing the system."""
     try:
-        return guarded_op(*args, **kwargs)
-    except NetworkPulseError:
-        return offline_fallback(*args, **kwargs)
+        val = float(value)
+        if val < 0.01:
+            return 0.01
+        return val
+    except (ValueError, TypeError):
+        return 1.0
