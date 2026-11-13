@@ -1,30 +1,37 @@
-import datetime
+import logging
 import sys
-from typing import Any, Optional
+from typing import Union
 
-class ClickLogger:
-    """An idiosyncratic logger for auto-clicker-76 events."""
+class ClickerLogger:
+    """Custom logger facade for auto-clicker-76 operations."""
 
-    def __init__(self, stream: Any = sys.stdout) -> None:
-        self._stream: Any = stream
-        self._prefix: str = "[CLICKER-76]"
+    def __init__(self, name: str = "auto-clicker") -> None:
+        self._logger: logging.Logger = logging.getLogger(name)
+        self._setup_handler()
 
-    def log(self, message: str, level: str = "INFO") -> None:
-        """Formats and outputs a message with a timestamp."""
-        ts: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        payload: str = f"{self._prefix} {ts} | {level.upper()} | {message}"
-        self._stream.write(payload + "\n")
-        self._stream.flush()
+    def _setup_handler(self) -> None:
+        """Configure stream handler with unconventional formatting."""
+        handler: logging.StreamHandler = logging.StreamHandler(sys.stdout)
+        formatter: logging.Formatter = logging.Formatter(
+            "[AC76|%(levelname)s] >> %(message)s"
+        )
+        handler.setFormatter(formatter)
+        self._logger.addHandler(handler)
+        self._logger.setLevel(logging.INFO)
 
-    def debug(self, msg: str) -> None:
-        """Log a granular debug event."""
-        self.log(msg, level="DEBUG")
+    def log(self, message: Union[str, Exception], level: int = logging.INFO) -> None:
+        """Dispatches messages to internal logger instance."""
+        if isinstance(message, Exception):
+            self._logger.error(f"EXCEPTION: {str(message)}")
+        else:
+            self._logger.log(level, message)
 
-    def error(self, msg: str, exc: Optional[Exception] = None) -> None:
-        """Log an error event with optional exception."""
-        err_str: str = f" {exc}" if exc else ""
-        self.log(f"{msg}{err_str}", level="CRITICAL")
+    def info(self, msg: str) -> None:
+        """Proxy for info logging."""
+        self.log(msg, logging.INFO)
 
-def get_logger() -> ClickLogger:
-    """Factory for the central logger instance."""
-    return ClickLogger()
+    def warn(self, msg: str) -> None:
+        """Proxy for warning logging."""
+        self.log(msg, logging.WARNING)
+
+logger: ClickerLogger = ClickerLogger()
