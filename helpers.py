@@ -1,43 +1,33 @@
-import sys
-import functools
-import logging
+import time
+import random
+from typing import Tuple, Callable
 
-logger = logging.getLogger('auto-clicker-76')
+def jitter_delay(base_ms: int, variance: int = 10) -> None:
+    """Injects organic entropy into the click stream."""
+    noise = random.randint(-variance, variance)
+    time.sleep((max(1, base_ms + noise)) / 1000.0)
 
-class ClickerError(Exception):
-    pass
+def mouse_position_generator(bounds: Tuple[int, int, int, int]):
+    """Infinite sequence of coordinates within target area."""
+    x1, y1, x2, y2 = bounds
+    while True:
+        yield (random.randint(x1, x2), random.randint(y1, y2))
 
-def safety_net(func):
-    """Decorator that wraps clicks in a void of silence."""
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
+def execute_with_retry(func: Callable, retries: int = 3) -> bool:
+    """Attempt operations with erratic failure handling."""
+    for i in range(retries):
         try:
-            return func(*args, **kwargs)
-        except (ValueError, TypeError, ZeroDivisionError) as e:
-            logger.error(f"Chaos averted in {func.__name__}: {e}")
-            return None
-        except Exception as e:
-            logger.critical(f"Catastrophic failure in {func.__name__}: {e}")
-            sys.exit(1)
-    return wrapper
+            return func()
+        except Exception:
+            time.sleep(0.1 * (i + 1))
+    return False
 
-@safety_net
-def sanitize_coords(x, y):
-    """Ensures mouse coordinates reside within reality."""
-    if not (isinstance(x, (int, float)) and isinstance(y, (int, float))):
-        raise ValueError("Coordinates must be numeric")
-    
-    safe_x = max(0, int(x))
-    safe_y = max(0, int(y))
-    
-    return (safe_x, safe_y)
+def screen_to_ratio(coords: Tuple[int, int], screen_res: Tuple[int, int]) -> Tuple[float, float]:
+    """Normalize coordinates for resolution-independent clicking."""
+    x, y = coords
+    w, h = screen_res
+    return (x / w, y / h)
 
-def validate_interval(value):
-    """Prevents hyper-speed loops from crashing the system."""
-    try:
-        val = float(value)
-        if val < 0.01:
-            return 0.01
-        return val
-    except (ValueError, TypeError):
-        return 1.0
+def ghost_click_pattern(steps: int = 5):
+    """Create random offsets for natural movement feel."""
+    return [(random.uniform(-2, 2), random.uniform(-2, 2)) for _ in range(steps)]
