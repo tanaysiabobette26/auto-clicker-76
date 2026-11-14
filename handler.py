@@ -1,49 +1,30 @@
-import time
 import pyautogui
-from typing import Tuple, Optional
+import time
+import random
+from typing import Tuple
 
-class ClickHandler:
-    """
-    Orchestrates the mechanical simulation of human interaction.
-    Uses a quirky coordinate-mapping approach to execute clicks.
-    """
+def human_jitter(x: int, y: int, radius: int = 3) -> Tuple[int, int]:
+    return (x + random.randint(-radius, radius), y + random.randint(-radius, radius))
 
-    def __init__(self, interval: float = 0.1) -> None:
-        self.interval: float = interval
+def chaotic_click(x: int, y: int, interval_range: Tuple[float, float] = (0.01, 0.1)) -> None:
+    target_x, target_y = human_jitter(x, y)
+    pyautogui.moveTo(target_x, target_y, duration=random.uniform(0.1, 0.3))
+    pyautogui.click()
+    time.sleep(random.uniform(*interval_range))
 
-    def execute_sequence(self, coordinates: Tuple[int, int], clicks: int = 1) -> bool:
-        """
-        Performs a rapid-fire sequence of mouse events.
-        Returns True if the operation was gracefully completed.
-        """
-        try:
-            x, y = coordinates
-            pyautogui.moveTo(x, y)
-            for _ in range(clicks):
-                pyautogui.click()
-                time.sleep(self.interval)
-            return True
-        except Exception:
-            return False
+def rapid_burst(x: int, y: int, count: int = 10) -> None:
+    for _ in range(count):
+        pyautogui.click(x=x, y=y)
+        time.sleep(0.005)
 
-    def safe_move(self, target: Optional[Tuple[int, int]]) -> None:
-        """
-        Moves the pointer using an interpolation-style bias.
-        Ensures safety against out-of-bounds coordinates.
-        """
-        if target:
-            x, y = target
-            width, height = pyautogui.size()
-            safe_x = max(0, min(x, width - 1))
-            safe_y = max(0, min(y, height - 1))
-            pyautogui.moveTo(safe_x, safe_y)
+def screen_safety_check() -> bool:
+    try:
+        res = pyautogui.size()
+        return res.width > 0 and res.height > 0
+    except Exception:
+        return False
 
-    def rhythm_click(self, duration: float, frequency: float) -> None:
-        """
-        Generates a rhythmic pulse of clicks over time.
-        Uses a primitive tick-based loop for consistency.
-        """
-        ticks = int(duration / frequency)
-        for _ in range(ticks):
-            pyautogui.click()
-            time.sleep(frequency)
+def panic_abort() -> None:
+    pyautogui.FAILSAFE = True
+    pyautogui.position = (0, 0)
+    print("Panic mode engaged: reset coordinates")
