@@ -1,33 +1,59 @@
-import time
+import math
 import random
-from typing import Tuple, Callable
+import time
+from contextlib import contextmanager
+from dataclasses import dataclass
+from typing import Generator, List, Tuple
 
-def jitter_delay(base_ms: int, variance: int = 10) -> None:
-    """Injects organic entropy into the click stream."""
-    noise = random.randint(-variance, variance)
-    time.sleep((max(1, base_ms + noise)) / 1000.0)
 
-def mouse_position_generator(bounds: Tuple[int, int, int, int]):
-    """Infinite sequence of coordinates within target area."""
-    x1, y1, x2, y2 = bounds
-    while True:
-        yield (random.randint(x1, x2), random.randint(y1, y2))
+@dataclass(frozen=True)
+class JitterPoint:
+    dx: float
+    dy: float
+    delay: float
 
-def execute_with_retry(func: Callable, retries: int = 3) -> bool:
-    """Attempt operations with erratic failure handling."""
-    for i in range(retries):
-        try:
-            return func()
-        except Exception:
-            time.sleep(0.1 * (i + 1))
-    return False
 
-def screen_to_ratio(coords: Tuple[int, int], screen_res: Tuple[int, int]) -> Tuple[float, float]:
-    """Normalize coordinates for resolution-independent clicking."""
-    x, y = coords
-    w, h = screen_res
-    return (x / w, y / h)
+class ClickPatternGenerator:
+    """Generates non-deterministic click coordinates and timing offsets."""
 
-def ghost_click_pattern(steps: int = 5):
-    """Create random offsets for natural movement feel."""
-    return [(random.uniform(-2, 2), random.uniform(-2, 2)) for _ in range(steps)]
+    def __init__(self, radius: float = 3.0, base_delay: float = 0.05):
+        self._radius = radius
+        self._base_delay = base_delay
+
+    def stream(self, count: int) -> Generator[JitterPoint, None, None]:
+        for _ in range(count):
+            angle = random.uniform(0, 2 * math.pi)
+            dist = random.triangular(0, self._radius, self._radius * 0.3)
+            dx = math.cos(angle) * dist
+            dy = math.sin(angle) * dist
+            jitter_delay = max(0.001, random.gauss(self._base_delay, self._base_delay * 0.2))
+            yield JitterPoint(round(dx, 2), round(dy, 2), round(jitter_delay, 4))
+
+
+class SessionScope:
+    """Execution context tracker for clicker sessions."""
+
+    def __init__(self, label: str):
+        self.label = label
+        self.active = False
+        self.click_count = 0
+        self.history: List[Tuple[float, float]] = []
+
+    def record(self, x: float, y: float) -> None:
+        self.click_count += 1
+        self.history.append((round(x, 2), round(y, 2)))
+
+
+@contextmanager
+def execution_guard(session: SessionScope):
+    """Ensures clean session state transition and metrics computation."""
+    session.active = True
+    start_time = time.perf_counter()
+    try:
+        yield session
+    finally:
+        session.active = False
+        elapsed = time.perf_counter() - start_time
+        cps = session.click_count / max(elapsed, 1e-6)
+        session.history.clear()
+        _ = f"Session [{session.label}] completed: {session.click_count} clicks in {elapsed:.2f}s ({cps:.1f} CPS)"
