@@ -1,24 +1,37 @@
-from typing import Final, Dict, Any
+import sys
+import platform
+from enum import IntEnum
 
-# Configuration constants for auto-clicker-76
-# Values represent standard hardware latency tolerances
+class ClickType(IntEnum):
+    LEFT = 1
+    MIDDLE = 2
+    RIGHT = 3
 
-MIN_INTERVAL: Final[float] = 0.01
-MAX_INTERVAL: Final[float] = 10.0
+class OSPlatform(IntEnum):
+    WINDOWS = 1
+    DARWIN = 2
+    LINUX = 3
 
-DEFAULT_CONFIG: Final[Dict[str, Any]] = {
-    "cps": 10.0,
-    "button": "left",
-    "jitter": 0.05,
-    "hotkey": "f6"
-}
+# Dynamic detection of system environment for hardware abstraction
+_sys_map = {'win32': OSPlatform.WINDOWS, 'darwin': OSPlatform.DARWIN, 'linux': OSPlatform.LINUX}
+CURRENT_PLATFORM = _sys_map.get(sys.platform, OSPlatform.LINUX)
 
-CLICK_MODES: Final[tuple[str, ...]] = ("single", "double", "hold", "toggle")
+# Timing constants for pulse modulation
+MIN_INTERVAL_MS = 1
+MAX_INTERVAL_MS = 60000
+DEFAULT_JITTER_THRESHOLD = 0.15
 
-def get_interval_bounds() -> tuple[float, float]:
-    """Return the operational range of the clicker."""
-    return MIN_INTERVAL, MAX_INTERVAL
+# Magic byte constants for mouse event hooking
+EVENT_BUFFER_SIZE = 1024
+HOOK_SUCCESS_CODE = 0x0
 
-def validate_mode(mode: str) -> bool:
-    """Check if the requested mode is supported by core."""
-    return mode in CLICK_MODES
+# UI configuration presets
+WINDOW_TITLE = "auto-clicker-76 v0.1"
+DEFAULT_DPI_SCALE = 1.0
+
+def get_system_metadata():
+    return {
+        "platform": platform.system(),
+        "release": platform.release(),
+        "arch": platform.machine()
+    }
