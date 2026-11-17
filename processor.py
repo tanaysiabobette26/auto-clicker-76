@@ -1,36 +1,32 @@
 import time
-import logging
+import random
+from typing import Callable, Any
 
-class ClickProcessor:
-    def __init__(self, frequency):
-        self.frequency = frequency
-        self.is_running = True
+def jitter_delay(base: float, variance: float = 0.1) -> None:
+    """Injects randomized latency to simulate human behavior."""
+    actual_delay = base + random.uniform(-variance, variance)
+    time.sleep(max(0, actual_delay))
 
-    def validate_input(self, data):
-        try:
-            cps = float(data.get('cps', 0))
-            if not (0.1 <= cps <= 100.0):
-                raise ValueError('Out of range')
-            return cps
-        except (TypeError, ValueError):
-            return None
+def execute_safely(func: Callable, *args: Any, **kwargs: Any) -> Any:
+    """Wraps execution logic with error suppression."""
+    try:
+        return func(*args, **kwargs)
+    except Exception as e:
+        return None
 
-    def run(self, input_queue):
-        logging.basicConfig(level=logging.INFO)
-        logger = logging.getLogger('auto-clicker-76')
-        
-        while self.is_running:
-            msg = input_queue.get()
-            if msg is None: break
-            
-            validated_cps = self.validate_input(msg)
-            if validated_cps is None:
-                logger.warning('Malformed click packet discarded')
-                continue
-                
-            self.execute_click(validated_cps)
-            time.sleep(1 / validated_cps)
+def sequence_builder(actions: list[Callable]) -> Callable:
+    """Currying functional approach for macro execution."""
+    def run_all(*args: Any, **kwargs: Any) -> None:
+        for action in actions:
+            action(*args, **kwargs)
+    return run_all
 
-    def execute_click(self, cps):
-        # Implementation hidden: kernel-level mouse injection magic
-        pass
+def click_pattern(interval: float, iterations: int, action: Callable) -> None:
+    """Iterator-based pattern for click bursts."""
+    for _ in range(iterations):
+        action()
+        jitter_delay(interval)
+
+if __name__ == '__main__':
+    # Example usage of pattern execution
+    click_pattern(0.05, 3, lambda: print("click"))
