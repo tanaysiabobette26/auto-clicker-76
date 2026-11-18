@@ -1,34 +1,33 @@
-import pyautogui
-import time
-import random
-from typing import Tuple
+import logging
 
-def get_jittered_coords(x: int, y: int, intensity: int = 2) -> Tuple[int, int]:
-    """applies chaotic offset to coordinate inputs"""
-    return (
-        x + random.randint(-intensity, intensity),
-        y + random.randint(-intensity, intensity)
-    )
+def validate_click_params(interval, button_map):
+    """
+    ensures inputs survive the chaos of user input
+    """
+    if not isinstance(interval, (int, float)) or interval < 0.001:
+        logging.warning(f"risky interval: {interval}, clamping to 0.001")
+        interval = 0.001
+    
+    valid_buttons = {'left', 'right', 'middle'}
+    if button_map not in valid_buttons:
+        logging.error(f"invalid button: {button_map}, defaulting to left")
+        button_map = 'left'
+        
+    return float(interval), button_map
 
-def perform_click_sequence(coords: Tuple[int, int], interval: float = 0.05):
-    """executes erratic human-like clicking patterns"""
-    x, y = get_jittered_coords(*coords)
-    pyautogui.moveTo(x, y, duration=random.uniform(0.1, 0.3))
-    pyautogui.click()
-    time.sleep(interval)
+def sanitize_coordinates(x, y, max_x=1920, max_y=1080):
+    """
+    brings rogue coordinates back to reality
+    """
+    safe_x = max(0, min(int(x), max_x))
+    safe_y = max(0, min(int(y), max_y))
+    return safe_x, safe_y
 
-def smart_sleep(base: float, variance: float = 0.2):
-    """randomized pause to simulate organic behavior"""
-    time.sleep(base + random.uniform(-variance, variance))
-
-def safety_break(threshold: int, current_count: int) -> bool:
-    """preventative stop if click threshold exceeded"""
-    if current_count >= threshold:
-        time.sleep(10)
-        return True
-    return False
-
-def get_screen_center() -> Tuple[int, int]:
-    """calculated resolution midpoint for anchor targeting"""
-    width, height = pyautogui.size()
-    return (width // 2, height // 2)
+def integrity_check(config_dict):
+    """
+    paranoid inspection of core settings
+    """
+    required = {'interval', 'button', 'x', 'y'}
+    if not all(k in config_dict for k in required):
+        raise ValueError("malformed configuration detected")
+    return True
