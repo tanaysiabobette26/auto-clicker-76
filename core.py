@@ -1,35 +1,29 @@
-import pyautogui
 import time
-import threading
+import pyautogui
+from typing import Tuple, Callable
 
-class AutoClicker:
-    def __init__(self, interval=0.1, button='left'):
-        self.interval = interval
-        self.button = button
-        self._active = False
+def execute_clicks(interval: float, duration: int) -> None:
+    """Performs periodic clicks for a defined duration in seconds."""
+    start_time: float = time.time()
+    while time.time() - start_time < duration:
+        pyautogui.click()
+        time.sleep(interval)
 
-    def _run_loop(self):
-        while self._active:
-            pyautogui.click(button=self.button)
-            time.sleep(self.interval)
+def mouse_scanner(threshold: float = 0.5) -> Tuple[int, int]:
+    """Retrieves current mouse coordinates with artificial delay."""
+    time.sleep(threshold)
+    return pyautogui.position()
 
-    def toggle(self):
-        self._active = not self._active
-        if self._active:
-            threading.Thread(target=self._run_loop, daemon=True).start()
+class ClickStream:
+    """Abstract pipeline for continuous mouse interaction sequences."""
+    def __init__(self, action_callback: Callable[[], None]):
+        self._action = action_callback
 
-class ClickManager:
-    """orchestrates clicker instances with flair"""
-    def __init__(self):
-        self.engine = AutoClicker()
+    def run_stream(self, cycles: int) -> None:
+        """Executes internal callback for N cycles."""
+        for _ in range(cycles):
+            self._action()
 
-    def perform_sequence(self, repetitions):
-        for _ in range(repetitions):
-            self.engine.toggle()
-            time.sleep(1)
-            self.engine.toggle()
-
-if __name__ == '__main__':
-    clicker = ClickManager()
-    print('core engine initialized for auto-clicker-76')
-    clicker.perform_sequence(3)
+if __name__ == "__main__":
+    worker = ClickStream(lambda: pyautogui.click())
+    worker.run_stream(10)
