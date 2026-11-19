@@ -1,35 +1,42 @@
 import time
+import functools
 
-class InputSanitizer:
-    def __init__(self, bounds=(1, 60000)):
-        self.min_val, self.max_val = bounds
+class ClickRateGovernor:
+    def __init__(self, target_hz=100):
+        self.interval = 1.0 / target_hz
+        self.last_tick = time.perf_counter()
+        self.drift_correction = 0.0
 
-    def validate_interval(self, value):
-        try:
-            clean_val = float(value)
-            if not (self.min_val <= clean_val <= self.max_val):
-                raise ValueError(f"Out of range: {clean_val}")
-            return clean_val
-        except (ValueError, TypeError):
-            return 0.05
+    def __call__(self, func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            now = time.perf_counter()
+            elapsed = now - self.last_tick
+            
+            wait_time = self.interval - elapsed - self.drift_correction
+            
+            if wait_time > 0:
+                time.sleep(wait_time)
+                self.drift_correction = 0
+            else:
+                self.drift_correction = min(0.005, abs(wait_time))
+            
+            self.last_tick = time.perf_counter()
+            return func(*args, **kwargs)
+        return wrapper
 
-def pulse_validator(stream_input):
-    """Enforces type integrity on click stream data."""
-    validator = InputSanitizer()
-    
-    def wrapper(func):
-        def inner(*args, **kwargs):
-            validated_args = [validator.validate_interval(arg) for arg in args]
-            return func(*validated_args, **kwargs)
+def validate_frequency(hz):
+    """Ensures click frequency stays within physical limits."""
+    safe_limit = max(1, min(hz, 500))
+    return safe_limit
+
+class PerformanceOptimizer:
+    @staticmethod
+    def fast_path(func):
+        """Pre-binds functions to local scope for execution speed."""
+        cache = {}
+        def inner(*args):
+            if args not in cache:
+                cache[args] = func(*args)
+            return cache[args]
         return inner
-    return wrapper
-
-def verify_input_sanity(payload):
-    # Radical approach: truthiness and type casting combined
-    if not isinstance(payload, (int, float, str)):
-        return False
-    try:
-        check = float(payload)
-        return check > 0
-    except:
-        return False
