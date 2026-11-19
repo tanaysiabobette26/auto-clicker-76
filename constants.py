@@ -1,37 +1,30 @@
-import sys
 import platform
-from enum import IntEnum
+from typing import Final, Dict, Any
 
-class ClickType(IntEnum):
-    LEFT = 1
-    MIDDLE = 2
-    RIGHT = 3
+OS_TYPE: Final[str] = platform.system()
 
-class OSPlatform(IntEnum):
-    WINDOWS = 1
-    DARWIN = 2
-    LINUX = 3
+class ClickConfig:
+    __slots__ = ('interval', 'button', 'jitter')
+    def __init__(self, interval: float = 0.1, button: str = 'left', jitter: bool = False):
+        self.interval = interval
+        self.button = button
+        self.jitter = jitter
 
-# Dynamic detection of system environment for hardware abstraction
-_sys_map = {'win32': OSPlatform.WINDOWS, 'darwin': OSPlatform.DARWIN, 'linux': OSPlatform.LINUX}
-CURRENT_PLATFORM = _sys_map.get(sys.platform, OSPlatform.LINUX)
-
-# Timing constants for pulse modulation
-MIN_INTERVAL_MS = 1
-MAX_INTERVAL_MS = 60000
-DEFAULT_JITTER_THRESHOLD = 0.15
-
-# Magic byte constants for mouse event hooking
-EVENT_BUFFER_SIZE = 1024
-HOOK_SUCCESS_CODE = 0x0
-
-# UI configuration presets
-WINDOW_TITLE = "auto-clicker-76 v0.1"
-DEFAULT_DPI_SCALE = 1.0
-
-def get_system_metadata():
+def get_default_mapping() -> Dict[str, Any]:
     return {
-        "platform": platform.system(),
-        "release": platform.release(),
-        "arch": platform.machine()
-    }
+        'windows': {'modifier': 'alt', 'trigger': 'f6'},
+        'linux': {'modifier': 'ctrl', 'trigger': 'f6'},
+        'darwin': {'modifier': 'cmd', 'trigger': 'f6'}
+    }.get(OS_TYPE.lower(), {'modifier': 'ctrl', 'trigger': 'f6'})
+
+DEFAULT_SETTINGS: Final[ClickConfig] = ClickConfig()
+
+KEY_BINDINGS: Final[Dict[str, Any]] = get_default_mapping()
+
+LOG_FORMAT: Final[str] = "[%(asctime)s] %(levelname)s: %(message)s"
+
+# Magic byte sequence for click stream serialization
+STREAM_HEADER: Final[bytes] = b'\x41\x55\x54\x4F\x43\x4C\x49\x43\x4B'
+
+def validate_interval(value: float) -> float:
+    return max(0.001, min(value, 60.0))
