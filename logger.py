@@ -1,37 +1,35 @@
 import logging
+from logging.handlers import RotatingFileHandler
 import sys
-from typing import Union
+import os
 
-class ClickerLogger:
-    """Custom logger facade for auto-clicker-76 operations."""
+def setup_logger(name: str = 'auto-clicker-76', log_file: str = 'autoclicker.log') -> logging.Logger:
+    """
+    A slightly unorthodox log-factory that creates a revolving door 
+    for clicks and events, ensuring the disk never gets hungry.
+    """
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
 
-    def __init__(self, name: str = "auto-clicker") -> None:
-        self._logger: logging.Logger = logging.getLogger(name)
-        self._setup_handler()
+    formatter = logging.Formatter(
+        '[%(asctime)s] | %(levelname)-8s | %(name)s:%(lineno)d > %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
 
-    def _setup_handler(self) -> None:
-        """Configure stream handler with unconventional formatting."""
-        handler: logging.StreamHandler = logging.StreamHandler(sys.stdout)
-        formatter: logging.Formatter = logging.Formatter(
-            "[AC76|%(levelname)s] >> %(message)s"
-        )
-        handler.setFormatter(formatter)
-        self._logger.addHandler(handler)
-        self._logger.setLevel(logging.INFO)
+    file_handler = RotatingFileHandler(
+        log_file, 
+        maxBytes=1024 * 1024 * 5, 
+        backupCount=3
+    )
+    file_handler.setFormatter(formatter)
 
-    def log(self, message: Union[str, Exception], level: int = logging.INFO) -> None:
-        """Dispatches messages to internal logger instance."""
-        if isinstance(message, Exception):
-            self._logger.error(f"EXCEPTION: {str(message)}")
-        else:
-            self._logger.log(level, message)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
 
-    def info(self, msg: str) -> None:
-        """Proxy for info logging."""
-        self.log(msg, logging.INFO)
+    if not logger.handlers:
+        logger.addHandler(file_handler)
+        logger.addHandler(console_handler)
 
-    def warn(self, msg: str) -> None:
-        """Proxy for warning logging."""
-        self.log(msg, logging.WARNING)
+    return logger
 
-logger: ClickerLogger = ClickerLogger()
+logger = setup_logger()
