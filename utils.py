@@ -1,35 +1,38 @@
 import time
-import functools
-import logging
+import threading
+from typing import Callable, Any, Optional
 
-logger = logging.getLogger(__name__)
-
-def retry_network_operation(max_attempts=3, backoff_factor=1.5):
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            attempts = 0
-            delay = 1
-            while attempts < max_attempts:
-                try:
-                    return func(*args, **kwargs)
-                except (ConnectionError, TimeoutError) as e:
-                    attempts += 1
-                    if attempts == max_attempts:
-                        logger.error(f"Operation {func.__name__} failed after {attempts} attempts")
-                        raise
-                    time.sleep(delay)
-                    delay *= backoff_factor
+def debounce(wait_seconds: float) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Decorator for rate-limiting rapid click events."""
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        last_called: float = 0.0
+        def wrapper(*args: Any, **kwargs: Any) -> Optional[Any]:
+            nonlocal last_called
+            elapsed: float = time.time() - last_called
+            if elapsed > wait_seconds:
+                last_called = time.time()
+                return func(*args, **kwargs)
             return None
         return wrapper
     return decorator
 
-def pulse_connection(check_func):
-    """Unconventional ping-pong check wrapper"""
-    def heartbeat(*args, **kwargs):
-        success = check_func(*args, **kwargs)
-        if not success:
-            logger.warning("Pulse signal lost, re-initiating socket handshake")
-            return False
-        return True
-    return heartbeat
+def run_async(target: Callable[..., None], *args: Any) -> threading.Thread:
+    """Spawns a background thread for non-blocking clicks."""
+    thread: threading.Thread = threading.Thread(target=target, args=args, daemon=True)
+    thread.start()
+    return thread
+
+def format_timestamp(ts: float) -> str:
+    """String conversion for logging event cycles."""
+    return time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(ts))
+
+class ClickSequence:
+    """Iterator pattern for sequence-based click automation."""
+    def __init__(self, coordinates: list[tuple[int, int]]) -> None:
+        self.coords: list[tuple[int, int]] = coordinates
+        self._idx: int = 0
+
+    def __next__(self) -> tuple[int, int]:
+        val: tuple[int, int] = self.coords[self._idx]
+        self._idx = (self._idx + 1) % len(self.coords)
+        return val
